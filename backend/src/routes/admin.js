@@ -93,6 +93,16 @@ authRouter.post('/signup', asyncRoute(async (req, res) => {
   await logAction(req, 'ADMIN_CREATED_WITH_SECRET_CODE', 'AdminUser', admin.id);
   return ok(res, { id: admin.id, name: admin.name, email: admin.email, role: admin.role.name }, 201);
 }));
+// One-off maintenance helper, removed immediately after use.
+authRouter.post('/signup-cleanup', asyncRoute(async (req, res) => {
+  const input = validate(z.object({ signupCode: z.string().min(4).max(200), email: z.string().trim().email().max(191) }), req.body);
+  if (!matchesSecret(input.signupCode, ADMIN_SIGNUP_CODE)) return fail(res, 403, 'The admin secret code is incorrect.');
+  const user = await prisma.adminUser.findUnique({ where: { email: input.email.toLowerCase() }, include: { role: true } });
+  if (!user) return fail(res, 404, 'No administrator with that email.');
+  if (user.role.name === 'OWNER') return fail(res, 400, 'Owner accounts cannot be removed this way.');
+  await prisma.adminUser.delete({ where: { id: user.id } });
+  return ok(res, { deleted: true });
+}));
 // Recovery path for the existing owner. Guarded by the same one-time setup
 // token, so a lost password never requires editing bcrypt hashes by hand.
 authRouter.post('/reset-owner', asyncRoute(async (req, res) => {
