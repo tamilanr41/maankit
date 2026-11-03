@@ -7,7 +7,7 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
   NPM_FLAGS = "--no-audit --no-fund"
 
 # Optional same-origin API proxy. Enable this if admin cookies are blocked as
