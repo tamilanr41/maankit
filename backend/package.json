@@ -12,6 +12,7 @@
     "db:seed": "node prisma/seed.js",
     "test": "node --test",
     "admin:create": "node src/scripts/create-admin.js",
+    "admin:reset": "node src/scripts/reset-admin.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
