@@ -176,7 +176,7 @@ publicRouter.post('/orders', asyncRoute(async (req, res) => {
   // keeps the transaction to three quick inserts instead of holding a lock
   // across several network round trips to the database.
   const products = await prisma.product.findMany({ where: { id: { in: uniqueIds } } });
-  const calc = await calculateOrder(products, input.items);
+  const [calc, contact] = await Promise.all([calculateOrder(products, input.items), readSettings(['whatsappNumber'])]);
   const date = new Date().toISOString().slice(0, 10).replaceAll('-', '');
   const reference = `MKM-${date}-${randomBytes(5).toString('hex').toUpperCase()}`;
 
@@ -195,7 +195,7 @@ publicRouter.post('/orders', asyncRoute(async (req, res) => {
       statusHistory: { create: { toStatus: 'ENQUIRY', note: 'Order enquiry created from storefront.' } },
     }, include: { items: true } });
   }, { maxWait: 10_000, timeout: 20_000 }));
-  return ok(res, await orderResponse(order), 201);
+  return ok(res, await orderResponse(order, contact.whatsappNumber), 201);
 }));
 
 const TRANSIENT_DB_ERROR = /deadlock|lock wait timeout|connection pool timed out/i;
@@ -221,9 +221,11 @@ publicRouter.get('/orders/reference/:orderNumber', asyncRoute(async (req, res) =
   return ok(res, summary);
 }));
 
-async function orderResponse(order) {
-  const settings = await readSettings(['whatsappNumber']);
-  const number = String(settings.whatsappNumber || process.env.WHATSAPP_BUSINESS_NUMBER || '').replace(/\D/g, '');
+async function orderResponse(order, knownWhatsappNumber) {
+  const rawNumber = knownWhatsappNumber != null
+    ? knownWhatsappNumber
+    : (await readSettings(['whatsappNumber'])).whatsappNumber || process.env.WHATSAPP_BUSINESS_NUMBER || '';
+  const number = String(rawNumber).replace(/\D/g, '');
   const rupees = (paise) => `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
   const lineText = order.items.map((item) => `• ${item.productName} — ${item.quantity} pieces × ${rupees(item.sellingPricePaise)} = ${rupees(item.lineTotalPaise)}`).join('\n');
   const message = [
