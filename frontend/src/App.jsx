@@ -775,7 +775,7 @@ function ImageManager({ images, onChange, max = 12 }) {
   const [picked, setPicked] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [urlDraft, setUrlDraft] = useState('');
-  const galleryQuery = useQuery({ queryKey: ['admin-media', gallerySearch], queryFn: async () => (await api.get('/admin/media', { params: { limit: 60, search: gallerySearch } })).data.data.items, enabled: galleryOpen });
+  const galleryQuery = useQuery({ queryKey: ['admin-media', gallerySearch], queryFn: async () => (await api.get('/admin/media', { params: { limit: 24, search: gallerySearch } })).data.data.items, enabled: galleryOpen });
   const selected = images || [];
   function change(list, primaryIndex) { onChange(reindexImages(list, primaryIndex ?? 0)); }
   function addAssets(assets) {
