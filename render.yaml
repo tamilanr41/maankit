@@ -6,7 +6,7 @@
 # (Any Host / %) because Render's free service has no fixed outbound IP.
 services:
   - type: web
-    name: mann-ki-mannat-api
+    name: maankit
     runtime: node
     plan: free
     region: singapore
