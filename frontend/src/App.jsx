@@ -775,7 +775,7 @@ function ImageManager({ images, onChange, max = 12 }) {
   const [picked, setPicked] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [urlDraft, setUrlDraft] = useState('');
-  const galleryQuery = useQuery({ queryKey: ['admin-media', gallerySearch], queryFn: async () => (await api.get('/admin/media', { params: { limit: 24, search: gallerySearch } })).data.data.items, enabled: galleryOpen });
+  const galleryQuery = useQuery({ queryKey: ['admin-media', gallerySearch], queryFn: async () => (await api.get('/admin/media', { params: { limit: 60, search: gallerySearch } })).data.data.items, enabled: galleryOpen });
   const selected = images || [];
   function change(list, primaryIndex) { onChange(reindexImages(list, primaryIndex ?? 0)); }
   function addAssets(assets) {
@@ -956,12 +956,58 @@ function ProductEditorFields({ formData, setFormData, categories }) {
     </section>
   </>;
 }
+function SettingsEditorFields({ formData, setFormData }) {
+  const set = (key, value) => setFormData((current) => ({ ...current, [key]: value }));
+  const shipping = formData.shippingChargePaise;
+  const threshold = Number(formData.freeShippingThreshold) || 12;
+  return <>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>01</span><div><h4>Store identity</h4><p>The name and lines customers see across the storefront.</p></div></div>
+      <div className="admin-form-grid">
+        <label className="admin-form-field"><span>Business name <i>*</i></span><input value={formData.businessName || ''} onChange={(event) => set('businessName', event.target.value)} placeholder="Mann Ki Mannat" /></label>
+        <label className="admin-form-field"><span>Tagline</span><input value={formData.tagline || ''} onChange={(event) => set('tagline', event.target.value)} placeholder="Har Ghar Ki Mannat" /></label>
+        <label className="admin-form-field"><span>Announcement bar</span><input value={formData.announcementBar || ''} onChange={(event) => set('announcementBar', event.target.value)} placeholder="Free shipping on 12 pieces" /></label>
+        <label className="admin-form-field admin-form-field--wide"><span>Promotion note <small>Shown near the cart and checkout</small></span><textarea rows="2" value={formData.promoText || ''} onChange={(event) => set('promoText', event.target.value)} placeholder="Buy 12 pieces and get free shipping." /></label>
+      </div>
+    </section>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>02</span><div><h4>Contact and address</h4><p>Used on the contact page, invoices, and WhatsApp order links.</p></div></div>
+      <div className="admin-form-grid">
+        <label className="admin-form-field"><span>WhatsApp number <small>With country code</small></span><input value={formData.whatsappNumber || ''} onChange={(event) => set('whatsappNumber', event.target.value)} placeholder="918680871115" /></label>
+        <label className="admin-form-field"><span>Phone</span><input value={formData.phone || ''} onChange={(event) => set('phone', event.target.value)} placeholder="8680871115" /></label>
+        <label className="admin-form-field"><span>Email</span><input type="email" value={formData.email || ''} onChange={(event) => set('email', event.target.value)} placeholder="hello@mannkimannat.com" /></label>
+        <label className="admin-form-field"><span>Business hours</span><input value={formData.businessHours || ''} onChange={(event) => set('businessHours', event.target.value)} placeholder="Mon–Sat, 10am–7pm" /></label>
+        <label className="admin-form-field admin-form-field--wide"><span>Address</span><textarea rows="2" value={formData.address || ''} onChange={(event) => set('address', event.target.value)} placeholder="Street, city, state, PIN" /></label>
+      </div>
+    </section>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>03</span><div><h4>Shipping and order minimums</h4><p>Controls the delivery line at checkout. Enter money in rupees.</p></div></div>
+      <div className="admin-form-grid">
+        <label className="admin-form-field"><span>Delivery charge <small>₹ per order below the free-shipping quantity</small></span><PaiseInput value={shipping ?? ''} onChange={(value) => set('shippingChargePaise', value)} placeholder="60" /></label>
+        <label className="admin-form-field"><span>Free shipping from <small>pieces</small></span><input type="number" min="1" step="1" value={formData.freeShippingThreshold ?? ''} onChange={(event) => set('freeShippingThreshold', event.target.value === '' ? '' : Number(event.target.value))} placeholder="12" /></label>
+        <label className="admin-form-field"><span>Store minimum order <small>pieces</small></span><input type="number" min="1" step="1" value={formData.globalMinimumQuantity ?? ''} onChange={(event) => set('globalMinimumQuantity', event.target.value === '' ? '' : Number(event.target.value))} placeholder="3" /></label>
+        <label className="admin-form-field"><span>Mixed carts <small>How shipping counts non-eligible items</small></span><select value={formData.mixedCartShippingPolicy || 'eligible_items'} onChange={(event) => set('mixedCartShippingPolicy', event.target.value)}><option value="eligible_items">Count eligible items only</option><option value="all_items">Count every item</option></select></label>
+        <div className="admin-form-summary"><small>Checkout preview</small><strong>{shipping == null || shipping === '' ? 'Delivery charge not set' : money(Number(shipping))}</strong><span>{shipping == null || shipping === '' ? 'Orders below the free-shipping quantity will ask the store to confirm delivery.' : `Free delivery from ${threshold} pieces`}</span></div>
+      </div>
+    </section>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>04</span><div><h4>Shopping assistant</h4><p>The small helper that answers product and policy questions.</p></div></div>
+      <div className="admin-switch-grid">
+        <label className="admin-switch"><input type="checkbox" checked={Boolean(formData.chatbotEnabled)} onChange={(event) => set('chatbotEnabled', event.target.checked)} /><span><b>Assistant enabled</b><small>Show the chat button on the storefront.</small></span></label>
+      </div>
+      <div className="admin-form-grid">
+        <label className="admin-form-field admin-form-field--wide"><span>Welcome message</span><textarea rows="3" value={formData.chatbotWelcome || ''} onChange={(event) => set('chatbotWelcome', event.target.value)} placeholder="I can help with products, prices, availability, and policies." /></label>
+      </div>
+    </section>
+  </>;
+}
 function AdminResource({ section }) {
   const location = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(section === 'products' && location.pathname.endsWith('/add'));
   const [editId, setEditId] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(() => section === 'products' && location.pathname.endsWith('/add') ? emptySectionForm('products') : {});
   const toast = useToast();
   useEffect(() => {
@@ -970,7 +1016,7 @@ function AdminResource({ section }) {
     else if (section === 'products') { setEditId(null); setFormOpen(false); }
   }, [section, location.pathname]);
   const routes = { products: '/admin/products', categories: '/admin/categories', orders: '/admin/orders', inventory: '/admin/inventory', settings: '/admin/settings', reports: '/admin/reports', offers: '/admin/offers', banners: '/admin/banners', content: '/admin/content', faqs: '/admin/faqs', reviews: '/admin/reviews', enquiries: '/admin/enquiries', newsletter: '/admin/newsletter', chatbot: '/admin/chatbot/faqs', customers: '/admin/customers', users: '/admin/users' };
-  const query = useQuery({ queryKey: ['admin-resource', section, page, search], queryFn: async () => (await api.get(routes[section] || routes.products, { params: { page, limit: 20, search } })).data.data, enabled: !!routes[section] });
+  const query = useQuery({ queryKey: ['admin-resource', section, page, search], queryFn: async () => (await api.get(routes[section] || routes.products, { params: { page, limit: 20, search } })).data.data, enabled: !!routes[section], placeholderData: (previousData) => previousData });
   const categoryOptions = useQuery({ queryKey: ['admin-category-options'], queryFn: async () => (await api.get('/admin/categories', { params: { limit: 100 } })).data.data.items || [], enabled: section === 'products' });
   const data = query.data;
   const records = section === 'content' && data && !Array.isArray(data) ? Object.values(data) : section === 'settings' && data ? Object.entries(data).map(([key, value]) => ({ id: key, key, value })) : (Array.isArray(data) ? data : data?.items || data?.products || data?.orders || []);
@@ -1005,7 +1051,9 @@ function AdminResource({ section }) {
   };
   async function save(event) {
     event.preventDefault();
+    if (saving) return;
     const route = routes[section];
+    setSaving(true);
     try {
       const payload = { ...formData };
       for (const key of ['mrpPaise','sellingPricePaise','minimumOrderQuantity','minimumQuantity','stockQuantity','lowStockThreshold','sortOrder','freeShippingThreshold','discountValue','minimumOrderPaise']) if (payload[key] !== undefined && payload[key] !== '' && payload[key] !== null) payload[key] = Number(payload[key]);
@@ -1028,6 +1076,7 @@ function AdminResource({ section }) {
       else { toast('This record can’t be edited from this screen.', 'error'); }
       closeEditor(); query.refetch();
     } catch (error) { toast(error.response?.data?.message || 'Could not save these changes.', 'error'); }
+    finally { setSaving(false); }
   }
   async function deleteRecord(id) { if (!window.confirm('Archive this record?')) return; try { if (section === 'users') await api.delete(`${routes[section]}/${id}`); else await api.delete(`${routes[section]}/${id}`); toast(section === 'users' ? 'Administrator disabled.' : 'Record archived.'); query.refetch(); } catch { toast('Could not archive this record.', 'error'); } }
   async function setStatus(orderId, status) { try { await api.patch(`/admin/orders/${orderId}/status`, { status }); toast('Order status updated.'); query.refetch(); } catch { toast('Could not update order status.', 'error'); } }
@@ -1048,13 +1097,13 @@ function AdminResource({ section }) {
   const downloadCsv = async (kind) => { try { const response = await api.get(`/admin/reports/${kind}?format=csv`, { responseType: 'blob' }); const url = URL.createObjectURL(response.data); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `mann-ki-mannat-${kind}.csv`; anchor.click(); URL.revokeObjectURL(url); } catch { toast('Report export is unavailable.', 'error'); } };
   return <div className="admin-content"><div className="admin-resource-toolbar"><div><div className="eyebrow"><span></span> Manage your store</div><h2>{columns}</h2><p>{section === 'orders' ? 'Enquiries remain separate from confirmed sales.' : section === 'reports' ? 'Reports count confirmed orders separately from enquiries.' : 'Keep the details accurate and ready for your customers.'}</p></div><div className="admin-resource-actions">{!['settings','content','reports'].includes(section) && <label className="admin-search"><Search size={15} /><input placeholder="Search records" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></label>}{addable && <button className="button button--forest" onClick={openNew}><Plus size={15} /> Add {({products:'product',categories:'category',offers:'offer',banners:'banner',faqs:'FAQ',chatbot:'answer',users:'administrator'})[section]}</button>}{section === 'content' && <button className="button button--forest" onClick={() => openEditor({ key:'shipping', title:'Shipping', content:'' })}><Plus size={15} /> Add / edit a page</button>}{section === 'settings' && <button className="button button--forest" onClick={() => openEditor(Object.keys(data || {}).length ? data : { businessName:'', tagline:'', whatsappNumber:'', email:'', phone:'', address:'', announcementBar:'', shippingChargePaise:'', freeShippingThreshold:12, globalMinimumQuantity:3, mixedCartShippingPolicy:'eligible_items', promoText:'' })}>Edit settings <Settings size={15} /></button>}{section === 'reports' && <button className="button button--outline" onClick={() => downloadCsv('orders')}>Export orders CSV <ArrowUpRight size={14} /></button>}{section === 'newsletter' && <button className="button button--outline" onClick={() => downloadCsv('newsletter')}>Export subscribers <ArrowUpRight size={14} /></button>}</div></div>
     {formOpen && <form className="admin-edit-panel" onSubmit={save} autoComplete="off"><div className="admin-edit-heading"><div><span className="eyebrow"><span></span> {section === 'products' ? 'Catalogue editor' : 'Record editor'}</span><h3>{editId ? 'Edit' : 'Add'} {section === 'products' ? 'product' : section === 'categories' ? 'category' : section === 'inventory' ? 'stock adjustment' : section === 'settings' ? 'business settings' : section === 'content' ? 'page content' : section === 'users' ? 'administrator' : section === 'chatbot' ? 'assistant answer' : section.slice(0,-1)}</h3><p>{section === 'products' ? 'Fields marked * are required. Prices are entered in rupees and saved automatically.' : 'Empty fields are cleared each time you open a new record.'}</p></div><button type="button" onClick={closeEditor} aria-label="Close editor"><X size={18} /></button></div>
-      {section === 'products' ? <ProductEditorFields formData={formData} setFormData={setFormData} categories={categoryOptions.data} /> : <div className="admin-form-grid admin-form-grid--full">
+      {section === 'products' ? <ProductEditorFields formData={formData} setFormData={setFormData} categories={categoryOptions.data} /> : section === 'settings' ? <SettingsEditorFields formData={formData} setFormData={setFormData} /> : <div className="admin-form-grid admin-form-grid--full">
         {editorFields.map(([key,label]) => {
           const wide = ['content','answer','description','shortDescription','ingredients','usageInstructions','notes','value','subtitle','promoText','question'].includes(key);
           return <label className={`admin-form-field ${wide ? 'admin-form-field--wide' : ''} ${['active','featured','seasonal','shippingEligible','chatbotEnabled','consent'].includes(key) ? 'admin-form-field--check' : ''}`} key={key}><span>{label}</span>{key === 'categoryId' ? <select value={formData[key] || ''} onChange={(e) => setFormData({ ...formData, [key]: e.target.value || null })}><option value="">Choose category</option>{categoryOptions.data?.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select> : key === 'discountType' || key === 'mixedCartShippingPolicy' || key === 'role' ? <select value={formData[key] || (key === 'role' ? 'ADMIN' : key === 'discountType' ? 'FIXED' : 'eligible_items')} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}>{(key === 'discountType' ? ['FIXED','PERCENT','FREE_SHIPPING'] : key === 'role' ? ['OWNER','ADMIN','EDITOR'] : ['eligible_items','all_items']).map((option) => <option key={option}>{option}</option>)}</select> : typeof formData[key] === 'boolean' || ['active','featured','seasonal','shippingEligible','chatbotEnabled'].includes(key) ? <input type="checkbox" checked={Boolean(formData[key])} onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })} /> : wide ? <textarea rows={key === 'content' ? 9 : 3} value={formData[key] ?? ''} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} placeholder={`Enter ${String(label).toLowerCase()}`} /> : <input type={key === 'password' ? 'password' : ['startsAt','endsAt'].includes(key) ? 'datetime-local' : ['discountValue','minimumOrderPaise','freeShippingThreshold','sortOrder','change'].includes(key) ? 'number' : 'text'} value={formData[key] == null ? '' : typeof formData[key] === 'object' ? JSON.stringify(formData[key]) : formData[key]} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} placeholder={`Enter ${String(label).toLowerCase()}`} />}</label>;
         })}
       </div>}
-      <div className="admin-edit-actions"><button type="button" className="button button--outline" onClick={closeEditor}>Cancel</button><button className="button button--forest" type="submit">{section === 'products' ? 'Save product' : 'Save changes'} <Check size={15} /></button></div></form>}
+      <div className="admin-edit-actions"><button type="button" className="button button--outline" onClick={closeEditor} disabled={saving}>Cancel</button><button className="button button--forest" type="submit" disabled={saving}>{saving ? <><LoaderCircle className="spin" size={15} /> Saving…</> : <>{section === 'products' ? 'Save product' : 'Save changes'} <Check size={15} /></>}</button></div></form>}
     {query.isLoading ? <div className="admin-table-loading"><LoaderCircle className="spin" /> Loading records…</div> : query.isError ? <ErrorNotice retry={() => query.refetch()} /> : records.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr>{tableFields.map(([, label]) => <th key={label}>{label}</th>)}<th>Actions</th></tr></thead><tbody>{records.map((record) => <tr key={record.id || record.key}>{tableFields.map(([field]) => { const value = field.split('.').reduce((current, part) => current?.[part], record); return <td key={field}>{section === 'products' && field === 'name' ? <span className="admin-product-cell"><img src={assetUrl(record.images?.[0]?.url || '/images/royal-sandal.png')} alt="" />{value}</span> : ['sellingPricePaise','mrpPaise','totalPaise','value'].includes(field) && section === 'products' ? money(value) : field === 'active' ? <span className={`status-pill status-pill--${value ? 'active' : 'inactive'}`}>{value ? 'Active' : 'Inactive'}</span> : field === 'approved' || field === 'consent' ? <span className={`status-pill status-pill--${value ? 'active' : 'inactive'}`}>{value ? 'Yes' : 'No'}</span> : ['createdAt','lastLoginAt','updatedAt','unsubscribedAt'].includes(field) ? value ? new Date(value).toLocaleDateString('en-IN') : '—' : ['orderStatus','status'].includes(field) ? section === 'orders' ? <select className="status-select" value={value} onChange={(e) => setStatus(record.id, e.target.value)}>{['ENQUIRY','CONFIRMED','PROCESSING','SHIPPED','DELIVERED','CANCELLED'].map((s) => <option key={s}>{s}</option>)}</select> : section === 'enquiries' ? <select className="status-select" value={value} onChange={(e) => enquiryStatus(record.id, e.target.value)}>{['NEW','IN_PROGRESS','RESOLVED','SPAM'].map((s) => <option key={s}>{s}</option>)}</select> : value : field === 'rating' ? `${value}/5` : value && typeof value === 'object' ? value.name || JSON.stringify(value) : value ?? '—'}</td>; })}<td><div className="table-actions">{['products','categories','offers','banners','faqs','chatbot','users','content'].includes(section) && <button title="Edit" onClick={() => openEditor(record)}><Eye size={15} /></button>}{['products','categories','offers','banners','faqs','chatbot','users'].includes(section) && <button title={section === 'users' ? 'Disable' : 'Delete'} onClick={() => deleteRecord(record.id)}><Trash2 size={15} /></button>}{section === 'reviews' && <button title={record.approved ? 'Hide review' : 'Approve review'} onClick={() => moderateReview(record.id, !record.approved)}><Check size={15} /></button>}{section === 'inventory' && <button title="Adjust stock" onClick={() => beginStockAdjustment(record)}><Plus size={15} /></button>}{section === 'orders' && <Link to={`/admin/orders/${record.id}`} title="View order"><ArrowUpRight size={15} /></Link>}</div></td></tr>)}</tbody></table><div className="admin-pagination"><span>{data?.total ?? records.length} records</span><div><button disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={15} /></button><span>{page}</span><button disabled={data?.pageCount && page >= data.pageCount} onClick={() => setPage(page + 1)}><ChevronRight size={15} /></button></div></div></div> : <div className="admin-empty"><PackageCheck size={24} /><h3>No records yet</h3><p>When your store has {section === 'orders' ? 'customer enquiries' : section}, they will show up here.</p>{addable && <button className="button button--forest" onClick={openNew}><Plus size={15} /> Add the first record</button>}{section === 'settings' && <button className="button button--forest" onClick={() => openEditor({})}>Configure settings <Settings size={15} /></button>}</div>}
   </div>;
 }

@@ -29,12 +29,15 @@ app.use((req, res) => fail(res, 404, 'That endpoint was not found.'));
 app.use((error, req, res, _next) => {
   if (res.headersSent) return;
   const databaseUnavailable = ['P1001', 'P1002'].includes(error.code) || error.name === 'PrismaClientInitializationError';
-  const status = Number(error.status) || (databaseUnavailable ? 503 : error.code === 'P2002' ? 409 : error.code === 'P2025' ? 404 : 500);
+  const explicitStatus = Number(error.status);
+  const status = explicitStatus || (databaseUnavailable ? 503 : error.code === 'P2002' ? 409 : error.code === 'P2025' ? 404 : 500);
   if (status >= 500) req.log?.error({ err: error }, 'request failed');
   if (error.code === 'P2002') return fail(res, 409, 'A record with these details already exists.');
   if (error.code === 'P2025') return fail(res, 404, 'The requested record was not found.');
   if (error.code === 'LIMIT_FILE_SIZE') return fail(res, 413, 'Each image must be 5 MB or smaller.');
   if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') return fail(res, 400, 'Upload up to 8 images at a time.');
   if (databaseUnavailable) return fail(res, 503, 'The store database is unavailable. Check the configured database connection and try again.');
-  return fail(res, status, status >= 500 ? 'Something went wrong. Please try again.' : error.message, error.details);
+  // A route that deliberately uses a 5xx (for example "shipping is not
+  // configured yet") should say so, instead of a generic failure message.
+  return fail(res, status, status >= 500 && !explicitStatus ? 'Something went wrong. Please try again.' : error.message, error.details);
 });

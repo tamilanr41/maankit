@@ -65,7 +65,7 @@ publicRouter.get('/products', asyncRoute(async (req, res) => {
     : sort === 'price-desc' ? { sellingPricePaise: 'desc' }
       : sort === 'popular' ? { orderItems: { _count: 'desc' } }
         : [{ featured: 'desc' }, { createdAt: 'desc' }];
-  const [items, total] = await Promise.all([
+  const [items, total] = await prisma.$transaction([
     prisma.product.findMany({ where, select: publicProductSelect, orderBy, skip: (page - 1) * limit, take: limit }),
     prisma.product.count({ where }),
   ]);
