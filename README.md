@@ -44,7 +44,7 @@ See [SETUP.md](docs/SETUP.md) for the full local setup and [ADMIN_GUIDE.md](docs
 
 ## Deploy on Render and Netlify
 
-This repository includes `render.yaml` for the API and `netlify.toml` for the storefront. Follow [GO_LIVE_RENDER_NETLIFY.md](docs/GO_LIVE_RENDER_NETLIFY.md) for the database, Render Blueprint, Netlify site, first owner account, and post-deploy checks. Render does not provide managed MySQL, so use an external MySQL 8 service such as Aiven MySQL.
+This repository includes `render.yaml` for the API and `netlify.toml` for the storefront. Follow [GO_LIVE_RENDER_NETLIFY.md](docs/GO_LIVE_RENDER_NETLIFY.md) for the Hostinger MySQL connection, Render Blueprint, Netlify site, first owner account, and post-deploy checks. Render does not provide managed MySQL, so the API connects to your Hostinger database over Remote MySQL.
 
 ## Environment and integrations
 

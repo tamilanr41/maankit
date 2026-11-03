@@ -4,7 +4,8 @@ This is the step-by-step path for this repository:
 
 - **Backend (Express + Prisma):** Render Web Service
 - **Frontend (React + Vite):** Netlify
-- **Database:** external managed MySQL 8 (Render does not offer managed MySQL)
+- **Database:** external MySQL 8 (this guide uses Hostinger MySQL; Render does not
+  offer managed MySQL)
 
 The repository already contains `render.yaml` and `netlify.toml`, so most build
 settings are automatic.
@@ -18,43 +19,61 @@ You need:
 - A GitHub repository containing this project.
 - A [Render](https://render.com) account.
 - A [Netlify](https://netlify.com) account.
-- A managed MySQL 8 database. The easiest free option is
-  [Aiven MySQL](https://aiven.io/mysql). Other options are Railway MySQL,
-  Clever Cloud MySQL, or any MySQL 8 host.
-- Optional: Cloudinary account (product image uploads) and a WhatsApp Business
-  number (prefilled order enquiries).
+- A MySQL 8 database. This guide uses **Hostinger MySQL**, which you already
+  have. Any other MySQL 8 host also works.
+- Optional: Cloudinary account (product image uploads). The WhatsApp number is
+  already set in `render.yaml`.
 
 Never commit real `.env` files or passwords. All production secrets belong in
 the Render and Netlify dashboards.
 
 ---
 
-## 1. Create the MySQL database
+## 1. Connect the Hostinger MySQL database
 
-1. Create a MySQL 8 service with your database provider.
-2. Copy the connection details:
-   - host
-   - port (usually `3306`)
-   - database name
-   - username
-   - password
-3. Build the Prisma connection string:
+Hostinger databases are localhost-only by default. Render connects from outside
+Hostinger, so you must allow remote access first.
+
+1. Open **Hostinger hPanel → Websites → Manage → Databases → MySQL Databases**.
+   Create a database if you do not already have one. Hostinger creates the
+   database user automatically; note the full database name, username, and
+   password (they usually contain an account prefix such as `u123456789_`).
+2. Open **Databases → Remote MySQL**. Enter `%` in the IP field (or tick
+   **Any Host**), select the database, and click **Create**. Render's free
+   service has no fixed outbound IP, so `%` is required. Authentication still
+   uses the database username and password.
+3. Copy the **MySQL hostname** shown at the top of the Remote MySQL page, for
+   example `srv1517.hstgr.io`. The remote port is `3306`.
+4. Build the Prisma connection string:
 
    ```text
-   mysql://USER:PASSWORD@HOST:PORT/DATABASE?sslaccept=strict
+   mysql://DB_USER:DB_PASSWORD@srv1517.hstgr.io:3306/DB_NAME
    ```
 
-   If the provider gives you a URL with `?ssl-mode=REQUIRED`, use
-   `?sslaccept=strict` instead for Prisma.
+   Hostinger shared MySQL usually connects without an SSL parameter. Add
+   `?sslaccept=strict` only if your Hostinger plan requires SSL. If you see an
+   SSL error, remove that parameter.
 
-4. Allow connections from Render. Render's free service does not have a fixed
-   outbound IP, so allow all IPs (`0.0.0.0/0`) and protect the database with a
-   long random password. On a paid Render plan you can restrict this to the
-   service's static outbound IPs.
 5. Keep this URL private. It is the `DATABASE_URL` for Render.
 
+### Existing Hostinger database
+
+If this database already contains the Mann Ki Mannat tables, you can import the
+provided SQL instead of letting Prisma create them:
+
+1. Open **Hostinger hPanel → Databases → phpMyAdmin** for the database.
+2. Import [`work/hostinger-mkm-import.sql`](../work/hostinger-mkm-import.sql).
+   It creates the `mkm_*` tables, baseline settings, and the Prisma migration
+   record.
+3. Because the migration record is included, Render's `prisma migrate deploy`
+   will skip the already-applied migration. Do **not** run `npm run db:seed`
+   again on that database.
+
+For a new empty database, let Render apply the migration and run the seed once
+as described in step 3.
+
 > The database user needs permission to create tables and indexes because
-> `prisma migrate deploy` runs during deployment.
+> `prisma migrate deploy` runs during the Render build.
 
 ---
 
@@ -85,13 +104,16 @@ git push -u origin main
 1. Open **Render Dashboard → New → Blueprint**.
 2. Select the `maankit` repository.
 3. Render reads `render.yaml` and asks for the values marked `sync: false`.
-4. Enter:
-   - `DATABASE_URL` — the MySQL URL from step 1.
+   Only these two need to be entered:
+   - `DATABASE_URL` — the Hostinger MySQL URL from step 1.
    - `FRONTEND_URL` — the final Netlify origin, for example
      `https://maankit.netlify.app` (no trailing slash). If you have not created
      the Netlify site yet, enter a temporary value and update it later.
-   - Optional WhatsApp/Cloudinary values, or leave them blank.
-5. Apply the Blueprint.
+
+   `JWT_SECRET` and `ADMIN_SETUP_TOKEN` are generated automatically by Render.
+   The WhatsApp number is already set. Add Cloudinary variables later only if
+   you need product image uploads.
+4. Apply the Blueprint.
 
 Render will:
 
@@ -103,13 +125,16 @@ Render will:
 When the service is live, copy its URL, for example:
 
 ```text
-https://maankit-api.onrender.com
+https://mann-ki-mannat-api.onrender.com
 ```
+
+Render may add a suffix if the service name is already taken. Use the exact URL
+shown in the dashboard.
 
 Test it in a browser:
 
 ```text
-https://maankit-api.onrender.com/health
+https://mann-ki-mannat-api.onrender.com/health
 ```
 
 Expected response:
@@ -119,6 +144,9 @@ Expected response:
 ```
 
 ### Seed the new database once
+
+Skip this section if you already imported `work/hostinger-mkm-import.sql` into
+the Hostinger database.
 
 Open **Render Dashboard → your service → Shell** and run:
 
@@ -153,7 +181,7 @@ Use the `ADMIN_SETUP_TOKEN` generated by Render:
 
    | Key | Value |
    | --- | --- |
-   | `VITE_API_URL` | `https://maankit-api.onrender.com/api/v1` |
+   | `VITE_API_URL` | `https://mann-ki-mannat-api.onrender.com/api/v1` |
    | `VITE_SITE_URL` | `https://maankit.netlify.app` |
    | `VITE_DEMO_MODE` | `false` |
 
@@ -233,7 +261,11 @@ then calls the API on the Netlify origin, so cookies stay first-party.
 | Symptom | Fix |
 | --- | --- |
 | Render build fails on `prisma generate` | The build command must install dev dependencies: `npm ci --include=dev`. The included `render.yaml` already does this. Confirm `NODE_VERSION` is 20. |
-| API returns `503` / "database is unavailable" | Check `DATABASE_URL`, database host/port, password, SSL mode, and the provider's IP allowlist. |
+| Hostinger: `Access denied for user ...` | Enable **Databases → Remote MySQL** in hPanel, allow `%` (Any Host), and select the correct database. Use the `srvXXXX.hstgr.io` hostname, not `localhost`. |
+| Hostinger: connection times out | Remote MySQL is not enabled for the database, or the host/port is wrong. Remote port is `3306`. |
+| Prisma throws an SSL error with Hostinger | Remove `?sslaccept=strict` from `DATABASE_URL` unless your Hostinger plan requires SSL. |
+| API returns `503` / "database is unavailable" | Check `DATABASE_URL`, database host/port, password, SSL mode, and Hostinger Remote MySQL access. |
+| API starts but tables are missing | Check the Render build log for `prisma migrate deploy`. You can also import `work/hostinger-mkm-import.sql` through phpMyAdmin. |
 | Browser shows a CORS error | `FRONTEND_URL` must exactly match the browser origin, including `https://` and no trailing slash. Redeploy after changing it. |
 | Admin login returns 200 but the dashboard immediately signs out | The browser blocked the cross-site cookie. Use the custom-domain or Netlify proxy setup above. |
 | Netlify build uses old API URL | Vite bakes env vars into the build. Change the variable, then clear cache and redeploy. |
