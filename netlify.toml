@@ -10,20 +10,21 @@
   NODE_VERSION = "20"
   NPM_FLAGS = "--no-audit --no-fund"
 
-# Client-side routes (React Router) must fall back to index.html.
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-
 # Optional same-origin API proxy. Enable this if admin cookies are blocked as
 # third-party cookies in the browser, then set VITE_API_URL=/api/v1 in Netlify.
-# Replace the host with the real Render service URL.
+# Replace the host with the real Render service URL. Keep this rule before the
+# SPA fallback so /api requests are proxied instead of rewritten to index.html.
 # [[redirects]]
 #   from = "/api/*"
 #   to = "https://maankit-api.onrender.com/api/:splat"
 #   status = 200
 #   force = true
+
+# Client-side routes (React Router) must fall back to index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
 
 [[headers]]
   for = "/assets/*"
