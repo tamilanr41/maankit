@@ -615,6 +615,7 @@ function AdminLogin() {
   const [setupStatus, setSetupStatus] = useState({ loading: true, available: false, reason: 'checking' });
   const { register: registerLogin, handleSubmit: handleLoginSubmit, formState: { errors: loginErrors, isSubmitting: loginSubmitting } } = useForm({ defaultValues: { email: '', password: '' } });
   const { register: registerSetup, handleSubmit: handleSetupSubmit, setError: setSetupError, formState: { errors: setupErrors, isSubmitting: setupSubmitting } } = useForm({ defaultValues: { name: '', email: '', password: '', confirmPassword: '', setupToken: '' } });
+  const { register: registerSignup, handleSubmit: handleSignupSubmit, setError: setSignupError, formState: { errors: signupErrors, isSubmitting: signupSubmitting } } = useForm({ defaultValues: { name: '', email: '', password: '', confirmPassword: '', signupCode: '' } });
   useEffect(() => {
     let current = true;
     api.get('/admin/auth/setup-status').then(({ data }) => { if (current) setSetupStatus({ loading: false, ...data.data }); }).catch(() => { if (current) setSetupStatus({ loading: false, available: false, reason: 'unavailable' }); });
@@ -642,8 +643,19 @@ function AdminLogin() {
       toast(error.response?.data?.message || 'Owner account setup failed. Check the backend and database connection.', 'error');
     }
   }
-  async function resetOwner(values) {
+  async function createAdmin(values) {
     if (values.password !== values.confirmPassword) {
+      setSignupError('confirmPassword', { type: 'validate', message: 'The passwords do not match.' });
+      return;
+    }
+    try {
+      await api.post('/admin/auth/signup', { name: values.name, email: values.email, password: values.password, signupCode: values.signupCode });
+      navigate('/admin/dashboard');
+    } catch (error) {
+      toast(error.response?.data?.message || 'The admin account could not be created. Check the secret code and try again.', 'error');
+    }
+  }
+  async function resetOwner(values) {    if (values.password !== values.confirmPassword) {
       setSetupError('confirmPassword', { type: 'validate', message: 'The passwords do not match.' });
       return;
     }
@@ -668,6 +680,16 @@ function AdminLogin() {
       <FormField label="Password" error={loginErrors.password?.message}><input {...registerLogin('password', { required: 'Enter your password.' })} type="password" autoComplete="current-password" placeholder="Your password" /></FormField>
       <button className="button button--forest button--wide" disabled={loginSubmitting}>{loginSubmitting ? 'Signing in…' : 'Sign in securely'} <ArrowRight size={16} /></button>
       <div className="admin-account-switch"><span>First time setting up this store?</span><button type="button" onClick={() => setAccountMode('setup')}>Create the owner account <ArrowRight size={14} /></button></div>
+      <div className="admin-account-switch"><span>Have an admin secret code?</span><button type="button" onClick={() => setAccountMode('signup')}>Create an admin account <ArrowRight size={14} /></button></div>
+    </form> : accountMode === 'signup' ? <form className="admin-login-form admin-login-form--setup" onSubmit={handleSignupSubmit(createAdmin)}>
+      <Link className="back-store" to="/"><ArrowLeft size={15} /> Back to storefront</Link><div className="eyebrow"><span></span> Team access</div><h1>Create your<br /><em>admin account.</em></h1><p>Enter the admin secret code shared by the store owner. Only that code allows a new admin account to be created.</p>
+      <FormField label="Full name" error={signupErrors.name?.message}><input {...registerSignup('name', { required: 'Enter your name.', minLength: { value: 2, message: 'Enter at least 2 characters.' } })} autoComplete="name" placeholder="Your name" /></FormField>
+      <FormField label="Email address (username)" error={signupErrors.email?.message}><input {...registerSignup('email', { required: 'Enter your email address.', pattern: { value: /^\S+@\S+\.\S+$/, message: 'Enter a valid email address.' } })} type="email" autoComplete="username" placeholder="you@example.com" /></FormField>
+      <FormField label="Password · at least 12 characters" error={signupErrors.password?.message}><input {...registerSignup('password', { required: 'Create a password.', minLength: { value: 12, message: 'Use at least 12 characters.' } })} type="password" autoComplete="new-password" placeholder="Create a strong password" /></FormField>
+      <FormField label="Confirm password" error={signupErrors.confirmPassword?.message}><input {...registerSignup('confirmPassword', { required: 'Confirm your password.' })} type="password" autoComplete="new-password" placeholder="Enter it again" /></FormField>
+      <FormField label="Admin secret code" error={signupErrors.signupCode?.message}><input {...registerSignup('signupCode', { required: 'Enter the admin secret code.' })} type="password" autoComplete="off" placeholder="Secret code from the owner" /></FormField>
+      <button className="button button--forest button--wide" disabled={signupSubmitting}>{signupSubmitting ? 'Creating admin account…' : 'Create admin account'} <ArrowRight size={16} /></button>
+      <div className="admin-account-switch"><span>Already have an account?</span><button type="button" onClick={() => setAccountMode('login')}>Sign in <ArrowRight size={14} /></button></div>
     </form> : <form className="admin-login-form admin-login-form--setup" onSubmit={handleSetupSubmit(canResetOwner ? resetOwner : createOwner)}>
       <Link className="back-store" to="/"><ArrowLeft size={15} /> Back to storefront</Link><div className="eyebrow"><span></span> {canResetOwner ? 'Owner password reset' : 'One-time store setup'}</div><h1>{canResetOwner ? <>Reset your<br /><em>owner access.</em></> : <>Create your<br /><em>owner account.</em></>}</h1><p>{canResetOwner ? 'Confirm the owner name and email, then set a new password. Store data stays unchanged.' : 'The first owner can manage products, offers, orders, and team access.'}</p>
       <div className={`admin-account-availability ${setupStatus.available ? 'admin-account-availability--ready' : 'admin-account-availability--locked'}`} role="status">{setupMessage}</div>

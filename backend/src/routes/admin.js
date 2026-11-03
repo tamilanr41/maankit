@@ -62,6 +62,37 @@ authRouter.post('/setup', asyncRoute(async (req, res) => {
   await logAction(req, 'ADMIN_INITIAL_SETUP', 'AdminUser', admin.id);
   return ok(res, { id: admin.id, name: admin.name, email: admin.email, role: admin.role.name }, 201);
 }));
+// Shared secret that lets someone create their own ADMIN account without the
+// owner. Change the fallback here, or set ADMIN_SIGNUP_CODE in the backend
+// environment, if the code is ever shared with the wrong person.
+const ADMIN_SIGNUP_CODE = String(process.env.ADMIN_SIGNUP_CODE || 'MKM-ADMIN-2026-9F3K7');
+function matchesSecret(supplied, expected) {
+  const a = Buffer.from(String(supplied), 'utf8');
+  const b = Buffer.from(String(expected), 'utf8');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+authRouter.post('/signup', asyncRoute(async (req, res) => {
+  const input = validate(z.object({
+    name: z.string().trim().min(2).max(120),
+    email: z.string().trim().email().max(191),
+    password: z.string().min(12).max(200),
+    signupCode: z.string().min(4).max(200),
+  }), req.body);
+  if (!matchesSecret(input.signupCode, ADMIN_SIGNUP_CODE)) return fail(res, 403, 'The admin secret code is incorrect.');
+  const email = input.email.toLowerCase();
+  const existing = await prisma.adminUser.findUnique({ where: { email }, select: { id: true } });
+  if (existing) return fail(res, 409, 'An administrator with this email already exists. Sign in instead.');
+  // Self-signup can only ever create an ADMIN, never an OWNER.
+  const role = await prisma.role.upsert({ where: { name: 'ADMIN' }, create: { name: 'ADMIN', description: 'Store management without owner-only access.' }, update: {} });
+  const admin = await prisma.adminUser.create({
+    data: { name: input.name, email, passwordHash: await hashPassword(input.password), roleId: role.id },
+    include: { role: true },
+  });
+  req.admin = { id: admin.id, name: admin.name, email: admin.email, active: admin.active, role: admin.role };
+  setAdminCookie(res, admin);
+  await logAction(req, 'ADMIN_CREATED_WITH_SECRET_CODE', 'AdminUser', admin.id);
+  return ok(res, { id: admin.id, name: admin.name, email: admin.email, role: admin.role.name }, 201);
+}));
 // Recovery path for the existing owner. Guarded by the same one-time setup
 // token, so a lost password never requires editing bcrypt hashes by hand.
 authRouter.post('/reset-owner', asyncRoute(async (req, res) => {

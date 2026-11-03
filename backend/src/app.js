@@ -22,6 +22,7 @@ app.use(cookieParser());
 app.use('/api/v1', rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false, skip: (req) => req.method === 'GET' && req.path.startsWith('/media/'), message: { success: false, message: 'Too many requests. Please try again shortly.' } }));
 app.use('/api/v1/admin/auth/login', rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many sign-in attempts. Please wait and try again.' } }));
 app.use('/api/v1/admin/auth/setup', rateLimit({ windowMs: 60 * 60_000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many setup attempts. Please wait before trying again.' } }));
+app.use('/api/v1/admin/auth/signup', rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many admin signup attempts. Please wait and try again.' } }));
 app.get('/health', (_req, res) => res.json({ success: true, status: 'ok' }));
 app.use('/api/v1', publicRouter);
 app.use('/api/v1/admin', adminRouter);
