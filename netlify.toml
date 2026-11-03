@@ -1,0 +1,39 @@
+# Netlify configuration for the Mann Ki Mannat storefront.
+# Import the repository in Netlify and leave the base directory blank:
+# Netlify reads this file and builds the frontend folder automatically.
+[build]
+  base = "frontend"
+  command = "npm ci --include=dev && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--no-audit --no-fund"
+
+# Client-side routes (React Router) must fall back to index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Optional same-origin API proxy. Enable this if admin cookies are blocked as
+# third-party cookies in the browser, then set VITE_API_URL=/api/v1 in Netlify.
+# Replace the host with the real Render service URL.
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://maankit-api.onrender.com/api/:splat"
+#   status = 200
+#   force = true
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"

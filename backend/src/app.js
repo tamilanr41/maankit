@@ -1,0 +1,38 @@
+import express from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import pinoHttp from 'pino-http';
+import rateLimit from 'express-rate-limit';
+import { env } from './config/env.js';
+import { logger } from './config/logger.js';
+import { publicRouter } from './routes/public.js';
+import { adminRouter } from './routes/admin.js';
+import { fail } from './utils/http.js';
+
+export const app = express();
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], imgSrc: ["'self'", 'data:', 'https://res.cloudinary.com'], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'], connectSrc: ["'self'", env.FRONTEND_URL], frameAncestors: ["'none'"] } } }));
+app.use(cors({ origin(origin, callback) { if (!origin || origin === env.FRONTEND_URL) return callback(null, true); const error = new Error('This origin is not allowed.'); error.status = 403; return callback(error); }, credentials: true, methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Idempotency-Key', 'X-CSRF-Protection'] }));
+app.use(pinoHttp({ logger, redact: ['req.headers.cookie', 'req.headers.authorization'] }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
+app.use(cookieParser());
+app.use('/api/v1', rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many requests. Please try again shortly.' } }));
+app.use('/api/v1/admin/auth/login', rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many sign-in attempts. Please wait and try again.' } }));
+app.use('/api/v1/admin/auth/setup', rateLimit({ windowMs: 60 * 60_000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many setup attempts. Please wait before trying again.' } }));
+app.get('/health', (_req, res) => res.json({ success: true, status: 'ok' }));
+app.use('/api/v1', publicRouter);
+app.use('/api/v1/admin', adminRouter);
+app.use((req, res) => fail(res, 404, 'That endpoint was not found.'));
+app.use((error, req, res, _next) => {
+  if (res.headersSent) return;
+  const databaseUnavailable = ['P1001', 'P1002'].includes(error.code) || error.name === 'PrismaClientInitializationError';
+  const status = Number(error.status) || (databaseUnavailable ? 503 : error.code === 'P2002' ? 409 : error.code === 'P2025' ? 404 : 500);
+  if (status >= 500) req.log?.error({ err: error }, 'request failed');
+  if (error.code === 'P2002') return fail(res, 409, 'A record with these details already exists.');
+  if (error.code === 'P2025') return fail(res, 404, 'The requested record was not found.');
+  if (databaseUnavailable) return fail(res, 503, 'The store database is unavailable. Check the configured database connection and try again.');
+  return fail(res, status, status >= 500 ? 'Something went wrong. Please try again.' : error.message, error.details);
+});

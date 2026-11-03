@@ -1,0 +1,448 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  ENQUIRY
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  REFUNDED
+}
+
+model Role {
+  id          String      @id @default(cuid())
+  name        String      @unique @db.VarChar(80)
+  description String?     @db.VarChar(255)
+  users       AdminUser[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("mkm_roles")
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  name         String   @db.VarChar(120)
+  email        String   @unique @db.VarChar(191)
+  passwordHash String   @db.VarChar(255)
+  active       Boolean  @default(true)
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastLoginAt  DateTime?
+
+  @@index([roleId, active])
+  @@map("mkm_admin_users")
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(120)
+  slug        String    @unique @db.VarChar(150)
+  description String?   @db.Text
+  imageUrl    String?   @db.VarChar(500)
+  active      Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([active, sortOrder])
+  @@map("mkm_categories")
+}
+
+model Product {
+  id                    String             @id @default(cuid())
+  name                  String             @db.VarChar(180)
+  slug                  String             @unique @db.VarChar(200)
+  sku                   String             @unique @db.VarChar(80)
+  description           String?            @db.Text
+  shortDescription      String?            @db.VarChar(300)
+  mrpPaise              Int?
+  sellingPricePaise     Int?
+  minimumOrderQuantity  Int                @default(3)
+  stockQuantity         Int                @default(0)
+  lowStockThreshold     Int                @default(5)
+  shippingEligible      Boolean            @default(true)
+  minimumQuantity       Int?
+  freeShippingQuantity  Int?
+  active                Boolean            @default(false)
+  featured              Boolean            @default(false)
+  seasonal              Boolean            @default(false)
+  ingredients           String?            @db.Text
+  usageInstructions     String?            @db.Text
+  fragrance             String?            @db.VarChar(180)
+  seoTitle              String?            @db.VarChar(180)
+  seoDescription        String?            @db.VarChar(300)
+  categoryId            String?
+  category              Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  images                ProductImage[]
+  variants              ProductVariant[]
+  orderItems            OrderItem[]
+  inventoryTransactions InventoryTransaction[]
+  reviews               Review[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  archivedAt            DateTime?
+
+  @@index([categoryId, active])
+  @@index([active, featured, createdAt])
+  @@index([stockQuantity, active])
+  @@fulltext([name, shortDescription, description])
+  @@map("mkm_products")
+}
+
+model ProductImage {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url        String   @db.VarChar(500)
+  publicId   String?  @db.VarChar(255)
+  altText    String?  @db.VarChar(200)
+  sortOrder  Int      @default(0)
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([productId, sortOrder])
+  @@map("mkm_product_images")
+}
+
+model ProductVariant {
+  id                String   @id @default(cuid())
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name              String   @db.VarChar(120)
+  sku               String   @unique @db.VarChar(80)
+  mrpPaise          Int?
+  sellingPricePaise Int?
+  stockQuantity     Int      @default(0)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([productId, active])
+  @@map("mkm_product_variants")
+}
+
+model Customer {
+  id         String    @id @default(cuid())
+  fullName   String    @db.VarChar(160)
+  phone      String    @unique @db.VarChar(24)
+  email      String?   @db.VarChar(191)
+  orders     Order[]
+  addresses  Address[]
+  reviews    Review[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([email])
+  @@map("mkm_customers")
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  address    String   @db.Text
+  city       String   @db.VarChar(100)
+  state      String   @db.VarChar(100)
+  pinCode    String   @db.VarChar(10)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([customerId, isDefault])
+  @@map("mkm_addresses")
+}
+
+model Order {
+  id                    String             @id @default(cuid())
+  orderNumber           String             @unique @db.VarChar(40)
+  publicToken           String             @unique @db.VarChar(64)
+  idempotencyKey        String?            @unique @db.VarChar(120)
+  customerId            String?
+  customer              Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName          String             @db.VarChar(160)
+  customerPhone         String             @db.VarChar(24)
+  customerEmail         String?            @db.VarChar(191)
+  addressSnapshot       String             @db.Text
+  city                  String             @db.VarChar(100)
+  state                 String             @db.VarChar(100)
+  pinCode               String             @db.VarChar(10)
+  deliveryInstructions  String?            @db.Text
+  subtotalPaise         Int
+  shippingPaise         Int
+  discountPaise         Int                @default(0)
+  totalPaise            Int
+  orderStatus           OrderStatus        @default(ENQUIRY)
+  paymentStatus         PaymentStatus      @default(UNPAID)
+  internalNotes         String?            @db.Text
+  items                 OrderItem[]
+  statusHistory         OrderStatusHistory[]
+  payments              Payment[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([orderStatus, createdAt])
+  @@index([customerPhone, createdAt])
+  @@map("mkm_orders")
+}
+
+model OrderItem {
+  id                String   @id @default(cuid())
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId         String?
+  product           Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName       String   @db.VarChar(180)
+  sku               String   @db.VarChar(80)
+  variantName       String?  @db.VarChar(120)
+  mrpPaise          Int?
+  sellingPricePaise Int
+  quantity          Int
+  lineTotalPaise    Int
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("mkm_order_items")
+}
+
+model OrderStatusHistory {
+  id         String      @id @default(cuid())
+  orderId    String
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  note       String?     @db.VarChar(500)
+  changedBy  String?     @db.VarChar(191)
+  createdAt  DateTime    @default(now())
+
+  @@index([orderId, createdAt])
+  @@map("mkm_order_status_history")
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          String        @db.VarChar(60)
+  providerPaymentId String?       @db.VarChar(160)
+  amountPaise       Int
+  status            PaymentStatus @default(PENDING)
+  metadata          Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([provider, providerPaymentId])
+  @@index([orderId, status])
+  @@map("mkm_payments")
+}
+
+model InventoryTransaction {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  change      Int
+  reason      String   @db.VarChar(180)
+  reference   String?  @db.VarChar(80)
+  createdBy   String?  @db.VarChar(191)
+  createdAt   DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@map("mkm_inventory_transactions")
+}
+
+model Offer {
+  id                    String   @id @default(cuid())
+  name                  String   @db.VarChar(160)
+  description           String?  @db.Text
+  promoText             String?  @db.VarChar(300)
+  discountType          String   @db.VarChar(30)
+  discountValue         Int
+  minimumOrderPaise     Int?
+  freeShippingThreshold Int?
+  startsAt              DateTime?
+  endsAt                DateTime?
+  active                Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([active, startsAt, endsAt])
+  @@map("mkm_offers")
+}
+
+model Coupon {
+  id            String   @id @default(cuid())
+  code          String   @unique @db.VarChar(60)
+  discountType  String   @db.VarChar(30)
+  discountValue Int
+  startsAt      DateTime?
+  endsAt        DateTime?
+  usageLimit    Int?
+  usageCount    Int      @default(0)
+  active        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active, startsAt, endsAt])
+  @@map("mkm_coupons")
+}
+
+model Banner {
+  id          String   @id @default(cuid())
+  title       String   @db.VarChar(180)
+  subtitle    String?  @db.VarChar(300)
+  imageUrl    String   @db.VarChar(500)
+  publicId    String?  @db.VarChar(255)
+  linkUrl     String?  @db.VarChar(500)
+  placement   String   @db.VarChar(60)
+  active      Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([placement, active, sortOrder])
+  @@map("mkm_banners")
+}
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique @db.VarChar(120)
+  value     Json
+  updatedBy String?  @db.VarChar(191)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("mkm_site_settings")
+}
+
+model Page {
+  id            String   @id @default(cuid())
+  key           String   @unique @db.VarChar(100)
+  title         String   @db.VarChar(180)
+  content       String   @db.LongText
+  seoTitle      String?  @db.VarChar(180)
+  seoDescription String? @db.VarChar(300)
+  active        Boolean  @default(true)
+  updatedBy     String?  @db.VarChar(191)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("mkm_pages")
+}
+
+model Faq {
+  id        String   @id @default(cuid())
+  question  String   @db.VarChar(500)
+  answer    String   @db.Text
+  category  String?  @db.VarChar(100)
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, sortOrder])
+  @@map("mkm_faqs")
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  name       String   @db.VarChar(120)
+  rating     Int
+  title      String?  @db.VarChar(180)
+  body       String   @db.Text
+  approved   Boolean  @default(false)
+  hidden     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([productId, approved, hidden])
+  @@map("mkm_reviews")
+}
+
+model Enquiry {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(160)
+  email     String   @db.VarChar(191)
+  phone     String?  @db.VarChar(24)
+  subject   String   @db.VarChar(180)
+  message   String   @db.Text
+  status    String   @default("NEW") @db.VarChar(30)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("mkm_enquiries")
+}
+
+model NewsletterSubscriber {
+  id            String    @id @default(cuid())
+  email         String    @unique @db.VarChar(191)
+  unsubscribeToken String  @unique @default(cuid()) @db.VarChar(64)
+  consent       Boolean   @default(false)
+  consentAt     DateTime?
+  unsubscribedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([unsubscribedAt, createdAt])
+  @@map("mkm_newsletter_subscribers")
+}
+
+model ChatbotFaq {
+  id        String   @id @default(cuid())
+  question  String   @db.VarChar(300)
+  answer    String   @db.Text
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, sortOrder])
+  @@map("mkm_chatbot_faqs")
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  sessionId String   @unique @db.VarChar(120)
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("mkm_chat_sessions")
+}
+
+model AdminActivityLog {
+  id         String   @id @default(cuid())
+  adminEmail String   @db.VarChar(191)
+  action     String   @db.VarChar(120)
+  entity     String?  @db.VarChar(120)
+  entityId   String?  @db.VarChar(120)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([adminEmail, createdAt])
+  @@index([entity, entityId])
+  @@map("mkm_admin_activity_logs")
+}

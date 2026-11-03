@@ -1,0 +1,42 @@
+# Render Blueprint for the Mann Ki Mannat API.
+# Create the service from Render Dashboard > New > Blueprint and select this repository.
+# Render does not provide managed MySQL, so DATABASE_URL must point to an external
+# MySQL 8 database (for example Aiven MySQL) with this service's outbound IPs allowed.
+services:
+  - type: web
+    name: maankit-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run db:generate && npm run db:deploy
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20.18.1
+      - key: LOG_LEVEL
+        value: info
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_SETUP_TOKEN
+        generateValue: true
+      # Set this to the exact Netlify site origin, for example
+      # https://maankit.netlify.app (no trailing slash).
+      - key: FRONTEND_URL
+        sync: false
+      # Prisma MySQL connection string, for example:
+      # mysql://USER:PASSWORD@HOST:PORT/DATABASE?ssl-mode=REQUIRED
+      - key: DATABASE_URL
+        sync: false
+      # Optional integrations. Leave blank if they are not used.
+      - key: WHATSAPP_BUSINESS_NUMBER
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.netlify/
+.render/
+.DS_Store
+Thumbs.db
+backend/prisma/dev.db
+frontend/.vite/

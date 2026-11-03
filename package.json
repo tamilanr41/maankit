@@ -1,0 +1,17 @@
+{
+  "name": "mann-ki-mannat-platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"node scripts/run-npm.js frontend run dev\" \"node scripts/run-npm.js backend run dev\"",
+    "build": "node scripts/run-npm.js frontend run build",
+    "start": "node scripts/run-npm.js backend run start",
+    "test": "node scripts/run-npm.js backend test",
+    "db:generate": "node scripts/run-npm.js backend run db:generate",
+    "db:migrate": "node scripts/run-npm.js backend run db:migrate",
+    "db:deploy": "node scripts/run-npm.js backend run db:deploy",
+    "db:seed": "node scripts/run-npm.js backend run db:seed",
+    "admin:create": "node scripts/run-npm.js backend run admin:create"
+  },
+  "devDependencies": { "concurrently": "^9.1.2" }
+}
