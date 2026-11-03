@@ -12,8 +12,9 @@ import {
   ShoppingBag, Sparkles, Truck, X, MessageCircle, Send, Instagram, Facebook, Mail, Phone, MapPin,
   SlidersHorizontal, LoaderCircle, LockKeyhole, LayoutDashboard, Boxes, ClipboardList, Settings,
   LogOut, ExternalLink, CheckCircle2, AlertCircle, Trash2, Eye, EyeOff,
+  Star, Images, ImagePlus, Link2, Upload, RefreshCw, Copy,
 } from 'lucide-react';
-import api, { getCategories, getFaqs, getProduct, getProducts, getPublicSettings } from './api';
+import api, { assetUrl, getCategories, getFaqs, getProduct, getProducts, getPublicSettings } from './api';
 import { futureCollections, previewCategories, previewProducts } from './catalog-preview';
 
 const CartContext = createContext(null);
@@ -32,7 +33,7 @@ const previewSettings = {
   announcementBar: 'Minimum 3 pieces · ₹75 each · Free shipping on 12 pieces + ₹60 off',
   promoText: 'Buy 12 pieces for ₹840: ₹60 off and free shipping. Shipping charges apply to 6 pieces.',
 };
-const media = (item) => item?.images?.[0]?.url || item?.images?.[0] || item?.image || item?.primaryImage?.url || '/images/royal-sandal.png';
+const media = (item) => assetUrl(item?.images?.[0]?.url || item?.images?.[0] || item?.image || item?.primaryImage?.url || '/images/royal-sandal.png');
 const money = (paise) => paise == null ? 'Price on request' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(paise / 100);
 const moneyRounded = (paise) => paise == null ? 'Price on request' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(paise / 100);
 const savedItemId = (item) => String(typeof item === 'string' ? item : item?.id ?? '');
@@ -242,7 +243,7 @@ function Home() {
     <section id="categories" className="section category-section">
       <SectionHeading eyebrow="Find your ritual" title={<>A place for <em>everyday meaning.</em></>} copy="Explore the familiar favourites and small essentials that bring a little more intention to your day." link="View all collections" href="/collections" />
       <div className="category-grid">{categories.slice(0, 6).map((category, index) => <Link to={`/shop?category=${encodeURIComponent(category.slug || category.name)}`} key={category.id || category.slug || category.name} className={`category-card category-card--${index + 1}`}>
-        <div className="category-image"><img loading="lazy" src={category.image || category.images?.[0]?.url || '/images/royal-sandal.png'} alt="" /><span className="category-arrow"><ArrowUpRight size={17} /></span></div>
+        <div className="category-image"><img loading="lazy" src={assetUrl(category.image || category.images?.[0]?.url || '/images/royal-sandal.png')} alt="" /><span className="category-arrow"><ArrowUpRight size={17} /></span></div>
         <div className="category-label"><div><h3>{category.name}</h3><span>{category.note || category.subtitle || 'Explore collection'}</span></div><ArrowRight size={16} /></div>
       </Link>)}</div>
     </section>
@@ -285,7 +286,7 @@ function CollectionsPage() {
     <section className="section collection-directory">
       <div className="section-heading"><div><div className="eyebrow"><span></span> Find your ritual</div><h2>A place for <em>everyday meaning.</em></h2><p>Choose a collection to see the pieces gathered for it.</p></div><Link className="underlined-link" to="/shop">Shop everything <ArrowUpRight size={15} /></Link></div>
       {isLoading ? <div className="category-grid">{[1, 2, 3, 4, 5, 6].map((item) => <div className="category-skeleton" key={item} />)}</div> : isError && !categories.length ? <ErrorNotice retry={() => refetch()} /> : <div className="category-grid">{categories.map((category, index) => <Link to={`/shop?category=${encodeURIComponent(category.slug || category.name)}`} key={category.id || category.slug || category.name} className={`category-card category-card--${index + 1}`}>
-        <div className="category-image"><img loading="lazy" src={category.image || category.images?.[0]?.url || '/images/royal-sandal.png'} alt="" /><span className="category-arrow"><ArrowUpRight size={17} /></span></div>
+        <div className="category-image"><img loading="lazy" src={assetUrl(category.image || category.images?.[0]?.url || '/images/royal-sandal.png')} alt="" /><span className="category-arrow"><ArrowUpRight size={17} /></span></div>
         <div className="category-label"><div><h3>{category.name}</h3><span>{category.note || category.subtitle || 'Explore collection'}</span></div><ArrowRight size={16} /></div>
       </Link>)}</div>}
     </section>
@@ -387,7 +388,7 @@ function ProductPage() {
   const query = useQuery({ queryKey: ['product', slug], queryFn: () => getProduct(slug), enabled: !demoMode });
   const { items, isPreview } = useCatalogue({ limit: 100 });
   const product = query.data || (demoMode ? items.find((item) => item.slug === slug) : null);
-  const images = useMemo(() => product?.images?.map((image) => image.url || image) || (product ? [media(product)] : []), [product]);
+  const images = useMemo(() => (product?.images?.map((image) => assetUrl(image.url || image)) || (product ? [media(product)] : [])).filter(Boolean), [product]);
   const hasPrice = product?.sellingPricePaise != null && Number(product.sellingPricePaise) > 0;
   const minimum = product?.minimumOrderQuantity || 3;
   const outOfStock = product?.stockQuantity === 0;
@@ -693,30 +694,281 @@ function AdminApp() {
   if (authLoading) return <div className="admin-loading"><LoaderCircle className="spin" /> Loading workspace</div>;
   if (!me) return <div className="admin-locked"><LockKeyhole size={26} /><h2>Admin sign-in required</h2><p>Your secure session has ended or is unavailable.</p><Link to="/admin/login" className="button button--forest">Sign in <ArrowRight size={15} /></Link></div>;
   const section = location.pathname.split('/')[2] || 'dashboard';
-  const title = ({ dashboard: 'Overview', products: 'Products', categories: 'Categories', orders: 'Order enquiries', inventory: 'Inventory', settings: 'Settings', reports: 'Reports', offers: 'Offers', banners: 'Banners', content: 'Site content', faqs: 'FAQs', reviews: 'Reviews', enquiries: 'Enquiries', newsletter: 'Newsletter', chatbot: 'Shopping assistant', customers: 'Customers', users: 'Team access' })[section] || 'Overview';
-  const links = [{ path: 'dashboard', label: 'Overview', Icon: LayoutDashboard }, { path: 'products', label: 'Products', Icon: Boxes }, { path: 'categories', label: 'Categories', Icon: Flower2 }, { path: 'orders', label: 'Order enquiries', Icon: ClipboardList }, { path: 'inventory', label: 'Inventory', Icon: PackageCheck }, { path: 'offers', label: 'Offers', Icon: Sparkles }, { path: 'banners', label: 'Banners', Icon: Eye }, { path: 'content', label: 'Site content', Icon: LayoutDashboard }, { path: 'faqs', label: 'FAQs', Icon: CircleHelp }, { path: 'reviews', label: 'Reviews', Icon: Heart }, { path: 'enquiries', label: 'Enquiries', Icon: MessageCircle }, { path: 'newsletter', label: 'Newsletter', Icon: Mail }, { path: 'chatbot', label: 'Shopping assistant', Icon: Sparkles }, { path: 'customers', label: 'Customers', Icon: ClipboardList }, ...(me.role?.name === 'OWNER' ? [{ path: 'users', label: 'Team access', Icon: ShieldCheck }] : []), { path: 'reports', label: 'Reports', Icon: ArrowUpRight }, { path: 'settings', label: 'Settings', Icon: Settings }];
+  const title = ({ dashboard: 'Overview', products: 'Products', categories: 'Categories', media: 'Media library', orders: 'Order enquiries', inventory: 'Inventory', settings: 'Settings', reports: 'Reports', offers: 'Offers', banners: 'Banners', content: 'Site content', faqs: 'FAQs', reviews: 'Reviews', enquiries: 'Enquiries', newsletter: 'Newsletter', chatbot: 'Shopping assistant', customers: 'Customers', users: 'Team access' })[section] || 'Overview';
+  const links = [{ path: 'dashboard', label: 'Overview', Icon: LayoutDashboard }, { path: 'products', label: 'Products', Icon: Boxes }, { path: 'categories', label: 'Categories', Icon: Flower2 }, { path: 'media', label: 'Media library', Icon: Images }, { path: 'orders', label: 'Order enquiries', Icon: ClipboardList }, { path: 'inventory', label: 'Inventory', Icon: PackageCheck }, { path: 'offers', label: 'Offers', Icon: Sparkles }, { path: 'banners', label: 'Banners', Icon: Eye }, { path: 'content', label: 'Site content', Icon: LayoutDashboard }, { path: 'faqs', label: 'FAQs', Icon: CircleHelp }, { path: 'reviews', label: 'Reviews', Icon: Heart }, { path: 'enquiries', label: 'Enquiries', Icon: MessageCircle }, { path: 'newsletter', label: 'Newsletter', Icon: Mail }, { path: 'chatbot', label: 'Shopping assistant', Icon: Sparkles }, { path: 'customers', label: 'Customers', Icon: ClipboardList }, ...(me.role?.name === 'OWNER' ? [{ path: 'users', label: 'Team access', Icon: ShieldCheck }] : []), { path: 'reports', label: 'Reports', Icon: ArrowUpRight }, { path: 'settings', label: 'Settings', Icon: Settings }];
   return <div className="admin-shell"><aside className={`admin-sidebar ${mobileSidebar ? 'admin-sidebar--open' : ''}`}><div className="admin-sidebar-brand"><BrandMark /><button onClick={() => setMobileSidebar(false)} aria-label="Close menu"><X size={17} /></button></div><div className="admin-nav-label">WORKSPACE</div><nav>{links.map(({ path, label, Icon }) => <NavLink key={path} to={`/admin/${path}`} className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`} onClick={() => setMobileSidebar(false)}><Icon size={17} />{label}{label === 'Order enquiries' && <span className="admin-nav-dot" />}</NavLink>)}</nav><div className="admin-sidebar-bottom"><div className="admin-user"><span className="admin-user-avatar">{(me.name || me.email || 'A').slice(0, 1).toUpperCase()}</span><span><b>{me.name || 'Administrator'}</b><small>{me.email}</small></span></div><button className="admin-signout" onClick={signOut}><LogOut size={16} />Sign out</button><Link to="/" className="view-store-link"><ExternalLink size={14} /> View storefront</Link></div></aside>
     <main className="admin-main"><header className="admin-topbar"><button className="icon-button admin-menu-toggle" onClick={() => setMobileSidebar(true)} aria-label="Open admin menu"><Menu /></button><div><small>ADMINISTRATION / {section.toUpperCase()}</small><h1>{title}</h1></div><div className="admin-topbar-right"><span className="admin-live"><i></i> Store workspace</span><span className="admin-user-mini">{(me.name || me.email || 'A').slice(0,1).toUpperCase()}</span></div></header>
-      {section === 'dashboard' ? <AdminDashboard /> : <AdminResource section={section} />}
+      {section === 'dashboard' ? <AdminDashboard /> : section === 'media' ? <MediaLibraryPage /> : <AdminResource section={section} />}
     </main></div>;
 }
 
-function AdminDashboard() {
-  const query = useQuery({ queryKey: ['admin-overview'], queryFn: async () => (await api.get('/admin/dashboard/overview')).data.data });
+function AdminDashboard() {  const query = useQuery({ queryKey: ['admin-overview'], queryFn: async () => (await api.get('/admin/dashboard/overview')).data.data });
   const data = query.data || {};
   const cards = [{ label: 'Active products', value: data.activeProducts ?? '—', change: 'Catalogue' }, { label: 'New enquiries', value: data.newEnquiries ?? '—', change: 'Needs attention' }, { label: 'Confirmed orders', value: data.confirmedOrders ?? '—', change: 'Sales only' }, { label: 'Low stock', value: data.lowStock ?? '—', change: 'Inventory' }];
   return <div className="admin-content"><div className="admin-welcome"><div><div className="eyebrow"><span></span> Your store, at a glance</div><h2>Good things begin <em>with a clear view.</em></h2><p>Order enquiries and confirmed orders are tracked separately.</p></div><Link to="/admin/products/add" className="button button--forest">Add a product <Plus size={16} /></Link></div><div className="admin-metric-grid">{cards.map((card, i) => <article className="admin-metric" key={card.label}><span>{card.label}</span><strong>{query.isLoading ? '…' : card.value}</strong><small className={i === 1 ? 'metric-warn' : ''}>{card.change}</small><span className="metric-mark">{['◈', '↗', '✓', '⌁'][i]}</span></article>)}</div><div className="admin-dashboard-grid"><section className="admin-panel admin-chart-panel"><div className="admin-panel-heading"><div><span>Order activity</span><small>Actual enquiries and confirmed orders</small></div><select aria-label="Chart period"><option>Last 30 days</option><option>Last 7 days</option></select></div>{data.orderTrends?.length ? <div className="simple-chart">{data.orderTrends.map((point, i) => <div key={point.label || i} style={{ height: `${Math.max(8, Math.min(100, point.value * 8))}%` }} title={`${point.label}: ${point.value}`}><span>{point.label}</span></div>)}</div> : <div className="chart-empty"><span className="chart-empty-icon"><ArrowUpRight /></span><p>{query.isLoading ? 'Loading order activity…' : 'Your order activity will appear here as enquiries come in.'}</p></div>}</section><section className="admin-panel admin-activity"><div className="admin-panel-heading"><div><span>Recent enquiries</span><small>Latest customer requests</small></div><Link to="/admin/orders">View all <ArrowRight size={14} /></Link></div>{data.recentEnquiries?.length ? data.recentEnquiries.slice(0, 5).map((order) => <div className="admin-order-row" key={order.id}><span className="order-initial">{(order.customerName || 'C')[0]}</span><div><b>{order.customerName}</b><small>{order.orderNumber}</small></div><span className={`status-pill status-pill--${(order.orderStatus || 'ENQUIRY').toLowerCase()}`}>{order.orderStatus || 'ENQUIRY'}</span></div>) : <div className="activity-empty"><ClipboardList size={22} /><p>{query.isLoading ? 'Loading enquiries…' : 'No enquiries yet. New customer orders will appear here.'}</p></div>}</section></div><div className="admin-setup-tip"><Sparkles size={16} /><span><b>Set your store up for success.</b> Add verified catalogue details, price, stock, and WhatsApp settings before opening orders.</span><Link to="/admin/settings">Review settings <ArrowRight size={14} /></Link></div></div>;
 }
 
+const productFormDefaults = {
+  name: '', slug: '', sku: '', categoryId: '', shortDescription: '', description: '',
+  mrpPaise: '', sellingPricePaise: '', minimumOrderQuantity: 3, stockQuantity: 0, lowStockThreshold: 5,
+  fragrance: '', ingredients: '', usageInstructions: '', shippingEligible: true,
+  featured: false, seasonal: false, active: true, images: [],
+};
+function emptySectionForm(section) {
+  if (section === 'products') return { ...productFormDefaults, images: [] };
+  if (section === 'categories') return { name: '', slug: '', description: '', imageUrl: '', active: true, sortOrder: 0 };
+  if (section === 'offers') return { name: '', description: '', promoText: '', discountType: 'FIXED', discountValue: '', minimumOrderPaise: '', freeShippingThreshold: '', active: true };
+  if (section === 'banners') return { title: '', subtitle: '', imageUrl: '', linkUrl: '', placement: 'home-hero', sortOrder: 0, active: true };
+  if (section === 'faqs') return { question: '', answer: '', category: '', active: true, sortOrder: 0 };
+  if (section === 'chatbot') return { question: '', answer: '', active: true, sortOrder: 0 };
+  if (section === 'users') return { name: '', email: '', password: '', role: 'ADMIN', active: true };
+  if (section === 'inventory') return { change: 0, reason: '' };
+  return {};
+}
+function productForm(record = {}) {
+  return {
+    ...productFormDefaults,
+    name: record.name || '', slug: record.slug || '', sku: record.sku || '',
+    categoryId: record.categoryId || record.category?.id || '',
+    shortDescription: record.shortDescription || '', description: record.description || '',
+    mrpPaise: record.mrpPaise ?? '', sellingPricePaise: record.sellingPricePaise ?? '',
+    minimumOrderQuantity: record.minimumOrderQuantity ?? record.minimumQuantity ?? 3,
+    stockQuantity: record.stockQuantity ?? 0, lowStockThreshold: record.lowStockThreshold ?? 5,
+    fragrance: record.fragrance || '', ingredients: record.ingredients || '', usageInstructions: record.usageInstructions || '',
+    shippingEligible: record.shippingEligible ?? true, featured: Boolean(record.featured), seasonal: Boolean(record.seasonal), active: record.active ?? true,
+    images: reindexImages((record.images || []).map((image) => ({ url: image.url || image, publicId: image.publicId || undefined, altText: image.altText || '', isPrimary: Boolean(image.isPrimary), sortOrder: image.sortOrder ?? 0 })), Math.max(0, (record.images || []).findIndex((image) => image.isPrimary))),
+  };
+}
+function reindexImages(list, primaryIndex = 0) {
+  const safePrimary = list.length ? Math.min(Math.max(primaryIndex, 0), list.length - 1) : 0;
+  return list.map((image, index) => ({ url: image.url, publicId: image.publicId || undefined, altText: image.altText || '', sortOrder: index, isPrimary: list.length > 0 && index === safePrimary }));
+}
+async function compressImage(file, maxSize = 1600, quality = 0.82) {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+    if (!blob) return file;
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'image'}.webp`, { type: blob.type || 'image/webp' });
+  } catch { return file; }
+}
+function readableSize(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+function PaiseInput({ value, onChange, placeholder, min = '0', ...rest }) {
+  return <input {...rest} type="number" min={min} step="1" inputMode="decimal" value={value === '' || value == null ? '' : Number(value) / 100} placeholder={placeholder} onChange={(event) => onChange(event.target.value === '' ? '' : Math.round(Number(event.target.value) * 100))} />;
+}
+function ImageManager({ images, onChange, max = 12 }) {
+  const toast = useToast();
+  const fileInput = useRef(null);
+  const galleryInput = useRef(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [gallerySearch, setGallerySearch] = useState('');
+  const [picked, setPicked] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [urlDraft, setUrlDraft] = useState('');
+  const galleryQuery = useQuery({ queryKey: ['admin-media', gallerySearch], queryFn: async () => (await api.get('/admin/media', { params: { limit: 60, search: gallerySearch } })).data.data.items, enabled: galleryOpen });
+  const selected = images || [];
+  function change(list, primaryIndex) { onChange(reindexImages(list, primaryIndex ?? 0)); }
+  function addAssets(assets) {
+    const existingPrimary = selected.findIndex((image) => image.isPrimary);
+    const next = [...selected];
+    for (const asset of assets) {
+      if (next.length >= max) { toast(`Up to ${max} images can be added to one product.`, 'error'); break; }
+      if (next.some((image) => image.url === asset.url)) continue;
+      next.push({ url: asset.url, altText: '', sortOrder: next.length, isPrimary: next.length === 0 });
+    }
+    if (next.length !== selected.length) change(next, existingPrimary >= 0 ? existingPrimary : 0);
+  }
+  async function uploadFiles(files) {
+    const list = [...files];
+    if (!list.length) return;
+    setUploading(true);
+    try {
+      const prepared = [];
+      for (const file of list) prepared.push(await compressImage(file));
+      const uploaded = [];
+      for (let index = 0; index < prepared.length; index += 8) {
+        const form = new FormData();
+        prepared.slice(index, index + 8).forEach((file) => form.append('images', file));
+        const response = await api.post('/admin/media', form);
+        uploaded.push(...response.data.data);
+      }
+      addAssets(uploaded);
+      toast(`${uploaded.length} image${uploaded.length === 1 ? '' : 's'} added. Save the product to publish them.`);
+      if (galleryOpen) galleryQuery.refetch();
+    } catch (error) {
+      toast(error.response?.data?.message || 'Image upload failed. Use a JPG, PNG, or WebP under 5 MB.', 'error');
+    } finally { setUploading(false); }
+  }
+  function addUrl() {
+    const value = urlDraft.trim();
+    if (!value) return;
+    const relative = value.startsWith('/images/') || value.startsWith('/api/v1/media/');
+    if (!relative) {
+      try { if (new URL(value).protocol !== 'https:') throw new Error('https'); } catch { toast('Paste a full HTTPS image URL.', 'error'); return; }
+    }
+    if (selected.some((image) => image.url === value)) { toast('That image is already in the product.', 'error'); return; }
+    if (selected.length >= max) { toast(`Up to ${max} images can be added to one product.`, 'error'); return; }
+    if (value !== urlDraft.trim()) return;
+    change([...selected, { url: value, altText: '', sortOrder: selected.length, isPrimary: selected.length === 0 }], selected.findIndex((image) => image.isPrimary));
+    setUrlDraft('');
+  }
+  function removeAt(index) {
+    const primaryIndex = selected.findIndex((image) => image.isPrimary);
+    const next = selected.filter((_, itemIndex) => itemIndex !== index);
+    const nextPrimary = primaryIndex === index ? 0 : primaryIndex > index ? primaryIndex - 1 : primaryIndex;
+    change(next, nextPrimary);
+  }
+  function move(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= selected.length) return;
+    const next = [...selected];
+    const [item] = next.splice(index, 1);
+    next.splice(target, 0, item);
+    const primaryUrl = selected.find((image) => image.isPrimary)?.url;
+    change(next, next.findIndex((image) => image.url === primaryUrl));
+  }
+  function togglePicked(asset) {
+    setPicked((current) => current.some((item) => item.id === asset.id) ? current.filter((item) => item.id !== asset.id) : [...current, asset]);
+  }
+  return <div className="image-manager">
+    <div className="image-manager-actions">
+      <button type="button" className="button button--forest" onClick={() => fileInput.current?.click()} disabled={uploading}>{uploading ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />}{uploading ? 'Preparing images…' : 'Upload from device'}</button>
+      <button type="button" className="button button--outline" onClick={() => { setPicked([]); setGalleryOpen(true); }}><Images size={15} /> Choose from gallery</button>
+      <input ref={fileInput} type="file" multiple accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { uploadFiles(event.target.files); event.target.value = ''; }} />
+      <span className="image-manager-count">{selected.length} of {max} images · first image is the main photo</span>
+    </div>
+    <div className="image-url-row"><Link2 size={14} /><input value={urlDraft} onChange={(event) => setUrlDraft(event.target.value)} placeholder="Or paste an HTTPS image URL" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addUrl(); } }} /><button type="button" className="text-link" onClick={addUrl}>Add URL</button></div>
+    {selected.length ? <div className="image-tile-grid">{selected.map((image, index) => <figure className={`image-tile ${image.isPrimary ? 'image-tile--primary' : ''}`} key={`${image.url}-${index}`}>
+      <div className="image-tile-preview"><img src={assetUrl(image.url)} alt={image.altText || `Product image ${index + 1}`} />{image.isPrimary && <span className="image-tile-badge"><Star size={11} /> Main</span>}</div>
+      <figcaption><input value={image.altText || ''} onChange={(event) => { const next = selected.map((item, itemIndex) => itemIndex === index ? { ...item, altText: event.target.value } : item); change(next, selected.findIndex((item) => item.isPrimary)); }} placeholder="Describe this image (optional)" aria-label={`Alt text for image ${index + 1}`} />
+        <div className="image-tile-tools">
+          <button type="button" title="Make main image" onClick={() => change(selected, index)} disabled={image.isPrimary}><Star size={13} /></button>
+          <button type="button" title="Move left" onClick={() => move(index, -1)} disabled={index === 0}><ChevronLeft size={14} /></button>
+          <button type="button" title="Move right" onClick={() => move(index, 1)} disabled={index === selected.length - 1}><ChevronRight size={14} /></button>
+          <button type="button" title="Remove image" onClick={() => removeAt(index)}><Trash2 size={13} /></button>
+        </div>
+      </figcaption>
+    </figure>)}</div> : <div className="image-manager-empty"><ImagePlus size={26} /><div><b>No images yet</b><span>Upload from this device, pick a saved image from the gallery, or paste a URL.</span></div></div>}
+    {galleryOpen && <div className="media-modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose images from gallery" onClick={() => setGalleryOpen(false)}>
+      <div className="media-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="media-modal-head"><div><span className="eyebrow"><span></span> Media library</span><h3>Choose saved images</h3></div><button type="button" className="icon-button" onClick={() => setGalleryOpen(false)} aria-label="Close gallery"><X size={18} /></button></div>
+        <div className="media-modal-tools"><label className="admin-search"><Search size={15} /><input value={gallerySearch} onChange={(event) => setGallerySearch(event.target.value)} placeholder="Search by file name" /></label><button type="button" className="button button--outline" onClick={() => galleryInput.current?.click()} disabled={uploading}>{uploading ? <LoaderCircle className="spin" size={14} /> : <Upload size={14} />} Upload new</button><input ref={galleryInput} type="file" multiple accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { uploadFiles(event.target.files); event.target.value = ''; }} /><button type="button" className="icon-button" onClick={() => galleryQuery.refetch()} title="Refresh"><RefreshCw size={15} /></button></div>
+        {galleryQuery.isLoading ? <div className="admin-table-loading"><LoaderCircle className="spin" /> Loading gallery…</div> : galleryQuery.isError ? <div className="image-manager-empty"><AlertCircle size={24} /><div><b>Gallery unavailable</b><span>Upload a new image instead.</span></div></div> : galleryQuery.data?.length ? <div className="media-pick-grid">{galleryQuery.data.map((asset) => { const active = picked.some((item) => item.id === asset.id); return <button type="button" key={asset.id} className={`media-pick ${active ? 'media-pick--active' : ''}`} onClick={() => togglePicked(asset)}><img src={assetUrl(asset.url)} alt={asset.fileName} loading="lazy" /><span>{active ? <Check size={13} /> : null}{asset.fileName}</span></button>; })}</div> : <div className="image-manager-empty"><Images size={26} /><div><b>No saved images yet</b><span>Upload one above and it will stay in the gallery for future products.</span></div></div>}
+        <div className="media-modal-foot"><span>{picked.length ? `${picked.length} selected` : 'Select one or more images'}</span><div><button type="button" className="button button--outline" onClick={() => setGalleryOpen(false)}>Cancel</button><button type="button" className="button button--forest" disabled={!picked.length} onClick={() => { addAssets(picked); setGalleryOpen(false); setPicked([]); }}>Add selected images <Check size={15} /></button></div></div>
+      </div>
+    </div>}
+  </div>;
+}
+function MediaLibraryPage() {
+  const toast = useToast();
+  const fileInput = useRef(null);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [uploading, setUploading] = useState(false);
+  const query = useQuery({ queryKey: ['admin-media-page', page, search], queryFn: async () => (await api.get('/admin/media', { params: { page, limit: 24, search } })).data.data });
+  const items = query.data?.items || [];
+  async function uploadFiles(files) {
+    const list = [...files];
+    if (!list.length) return;
+    setUploading(true);
+    try {
+      const prepared = [];
+      for (const file of list) prepared.push(await compressImage(file));
+      const uploaded = [];
+      for (let index = 0; index < prepared.length; index += 8) {
+        const form = new FormData();
+        prepared.slice(index, index + 8).forEach((file) => form.append('images', file));
+        uploaded.push(...(await api.post('/admin/media', form)).data.data);
+      }
+      toast(`${uploaded.length} image${uploaded.length === 1 ? '' : 's'} uploaded.`);
+      setPage(1);
+      query.refetch();
+    } catch (error) { toast(error.response?.data?.message || 'Image upload failed.', 'error'); } finally { setUploading(false); }
+  }
+  async function removeAsset(asset) {
+    if (!window.confirm('Remove this image from the gallery?')) return;
+    try { await api.delete(`/admin/media/${asset.id}`); toast('Image removed.'); query.refetch(); }
+    catch (error) { toast(error.response?.data?.message || 'Could not remove this image.', 'error'); }
+  }
+  async function copyAsset(asset) {
+    const url = new URL(assetUrl(asset.url), window.location.origin).href;
+    try { await navigator.clipboard.writeText(url); toast('Image URL copied.'); } catch { toast('Could not copy the URL. Long-press the image and copy its address.', 'error'); }
+  }
+  return <div className="admin-content">
+    <div className="admin-resource-toolbar"><div><div className="eyebrow"><span></span> Manage your store</div><h2>Media library</h2><p>One place for every product photo. Upload once, reuse on any product.</p></div><div className="admin-resource-actions"><label className="admin-search"><Search size={15} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search images" /></label><button type="button" className="button button--forest" onClick={() => fileInput.current?.click()} disabled={uploading}>{uploading ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />}{uploading ? 'Uploading…' : 'Upload images'}</button><input ref={fileInput} type="file" multiple accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { uploadFiles(event.target.files); event.target.value = ''; }} /></div></div>
+    {query.isLoading ? <div className="admin-table-loading"><LoaderCircle className="spin" /> Loading images…</div> : query.isError ? <ErrorNotice retry={() => query.refetch()} /> : items.length ? <div className="media-library-grid">{items.map((asset) => <article className="media-library-card" key={asset.id}><div className="media-library-card-image"><img src={assetUrl(asset.url)} alt={asset.fileName} loading="lazy" /></div><div className="media-library-card-body"><b title={asset.fileName}>{asset.fileName}</b><small>{readableSize(asset.sizeBytes)} · {new Date(asset.createdAt).toLocaleDateString('en-IN')}</small><div className="media-library-card-actions"><button type="button" title="Copy image URL" onClick={() => copyAsset(asset)}><Copy size={13} /> Copy URL</button><button type="button" title="Delete image" onClick={() => removeAsset(asset)}><Trash2 size={13} /> Delete</button></div></div></article>)}</div> : <div className="image-manager-empty admin-media-empty"><Images size={30} /><div><b>No images in the library yet</b><span>Upload product photos here, then choose them from any product form.</span></div><button type="button" className="button button--forest" onClick={() => fileInput.current?.click()}>Upload your first image</button></div>}
+    {query.data && query.data.pageCount > 1 && <div className="admin-pagination"><span>Page {query.data.page} of {query.data.pageCount} · {query.data.total} images</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft size={14} /></button><span>{page}</span><button type="button" disabled={page >= query.data.pageCount} onClick={() => setPage((current) => current + 1)}><ChevronRight size={14} /></button></div></div>}
+  </div>;
+}
+function ProductEditorFields({ formData, setFormData, categories }) {
+  const set = (key, value) => setFormData((current) => ({ ...current, [key]: value }));
+  const price = formData.sellingPricePaise ? money(formData.sellingPricePaise) : 'Set a selling price';
+  return <>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>01</span><div><h4>Product basics</h4><p>The name, code, and category customers will browse.</p></div></div>
+      <div className="admin-form-grid">
+        <label className="admin-form-field admin-form-field--wide"><span>Product name <i>*</i></span><input value={formData.name || ''} onChange={(event) => set('name', event.target.value)} placeholder="e.g. Royal Sandal Incense Sticks" autoComplete="off" /></label>
+        <label className="admin-form-field"><span>Slug <small>Leave blank to create it from the name</small></span><input value={formData.slug || ''} onChange={(event) => set('slug', event.target.value.trim().toLowerCase())} placeholder="royal-sandal" autoComplete="off" /></label>
+        <label className="admin-form-field"><span>SKU <i>*</i></span><input value={formData.sku || ''} onChange={(event) => set('sku', event.target.value.toUpperCase())} placeholder="MKM-INC-001" autoComplete="off" /></label>
+        <label className="admin-form-field"><span>Category</span><select value={formData.categoryId || ''} onChange={(event) => set('categoryId', event.target.value || null)}><option value="">No category</option>{(categories || []).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
+        <label className="admin-form-field admin-form-field--wide"><span>Short description <small>One line shown on product cards</small></span><textarea rows="2" maxLength="300" value={formData.shortDescription || ''} onChange={(event) => set('shortDescription', event.target.value)} placeholder="A calm, grounding sandalwood blend for daily rituals." /></label>
+      </div>
+    </section>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>02</span><div><h4>Price and stock</h4><p>Enter amounts in rupees — the store converts them automatically.</p></div></div>
+      <div className="admin-form-grid">
+        <label className="admin-form-field"><span>MRP <small>₹ per piece</small></span><PaiseInput value={formData.mrpPaise} onChange={(value) => set('mrpPaise', value)} placeholder="120" /></label>
+        <label className="admin-form-field"><span>Selling price <i>*</i> <small>₹ per piece</small></span><PaiseInput value={formData.sellingPricePaise} onChange={(value) => set('sellingPricePaise', value)} placeholder="75" /></label>
+        <label className="admin-form-field"><span>Minimum order <small>pieces</small></span><input type="number" min="1" max="500" step="1" value={formData.minimumOrderQuantity ?? 3} onChange={(event) => set('minimumOrderQuantity', event.target.value === '' ? '' : Number(event.target.value))} /></label>
+        <label className="admin-form-field"><span>Stock on hand <small>pieces</small></span><input type="number" min="0" step="1" value={formData.stockQuantity ?? 0} onChange={(event) => set('stockQuantity', event.target.value === '' ? '' : Number(event.target.value))} /></label>
+        <label className="admin-form-field"><span>Low-stock alert at <small>pieces</small></span><input type="number" min="0" step="1" value={formData.lowStockThreshold ?? 5} onChange={(event) => set('lowStockThreshold', event.target.value === '' ? '' : Number(event.target.value))} /></label>
+        <div className="admin-form-summary"><small>Customer sees</small><strong>{price}</strong><span>{formData.minimumOrderQuantity || 3} piece minimum{formData.mrpPaise && formData.sellingPricePaise && Number(formData.mrpPaise) > Number(formData.sellingPricePaise) ? ` · ${Math.round((1 - Number(formData.sellingPricePaise) / Number(formData.mrpPaise)) * 100)}% off MRP` : ''}</span></div>
+      </div>
+    </section>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>03</span><div><h4>Product photos</h4><p>Upload from this device or reuse an image from the gallery. Drag-free ordering with the arrows.</p></div></div>
+      <ImageManager images={formData.images || []} onChange={(images) => set('images', images)} />
+    </section>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>04</span><div><h4>Details and care</h4><p>Helpful information shown on the product page.</p></div></div>
+      <div className="admin-form-grid">
+        <label className="admin-form-field"><span>Fragrance</span><input value={formData.fragrance || ''} onChange={(event) => set('fragrance', event.target.value)} placeholder="Sandalwood, rose, lavender" /></label>
+        <label className="admin-form-field admin-form-field--wide"><span>Full description</span><textarea rows="5" value={formData.description || ''} onChange={(event) => set('description', event.target.value)} placeholder="Tell the story of this product, its ingredients, and how it feels to use." /></label>
+        <label className="admin-form-field admin-form-field--wide"><span>Ingredients</span><textarea rows="3" value={formData.ingredients || ''} onChange={(event) => set('ingredients', event.target.value)} placeholder="One ingredient per line, or a short paragraph." /></label>
+        <label className="admin-form-field admin-form-field--wide"><span>How to use</span><textarea rows="3" value={formData.usageInstructions || ''} onChange={(event) => set('usageInstructions', event.target.value)} placeholder="Light the tip, wait a moment, and place it on a heat-safe holder." /></label>
+      </div>
+    </section>
+    <section className="admin-form-section">
+      <div className="admin-form-section-head"><span>05</span><div><h4>Visibility</h4><p>Control where this product appears. A selling price is required before it can be active.</p></div></div>
+      <div className="admin-switch-grid">
+        {[['active', 'Active in the store', 'Customers can browse and order it.'], ['featured', 'Featured', 'Show it in featured collections on the home page.'], ['seasonal', 'Seasonal', 'Mark it for festive or limited-time ranges.'], ['shippingEligible', 'Shipping eligible', 'Counts toward free-shipping thresholds.']].map(([key, label, hint]) => <label className="admin-switch" key={key}><input type="checkbox" checked={Boolean(formData[key])} onChange={(event) => set(key, event.target.checked)} /><span><b>{label}</b><small>{hint}</small></span></label>)}
+      </div>
+    </section>
+  </>;
+}
 function AdminResource({ section }) {
   const location = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(section === 'products' && location.pathname.endsWith('/add'));
   const [editId, setEditId] = useState(null);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState(() => section === 'products' && location.pathname.endsWith('/add') ? emptySectionForm('products') : {});
   const toast = useToast();
-  useEffect(() => { if (section === 'products' && location.pathname.endsWith('/add')) setFormOpen(true); }, [section, location.pathname]);
+  useEffect(() => {
+    const wantsNew = section === 'products' && location.pathname.endsWith('/add');
+    if (wantsNew) { setEditId(null); setFormData(emptySectionForm('products')); setFormOpen(true); }
+    else if (section === 'products') { setEditId(null); setFormOpen(false); }
+  }, [section, location.pathname]);
   const routes = { products: '/admin/products', categories: '/admin/categories', orders: '/admin/orders', inventory: '/admin/inventory', settings: '/admin/settings', reports: '/admin/reports', offers: '/admin/offers', banners: '/admin/banners', content: '/admin/content', faqs: '/admin/faqs', reviews: '/admin/reviews', enquiries: '/admin/enquiries', newsletter: '/admin/newsletter', chatbot: '/admin/chatbot/faqs', customers: '/admin/customers', users: '/admin/users' };
   const query = useQuery({ queryKey: ['admin-resource', section, page, search], queryFn: async () => (await api.get(routes[section] || routes.products, { params: { page, limit: 20, search } })).data.data, enabled: !!routes[section] });
   const categoryOptions = useQuery({ queryKey: ['admin-category-options'], queryFn: async () => (await api.get('/admin/categories', { params: { limit: 100 } })).data.data.items || [], enabled: section === 'products' });
@@ -758,27 +1010,35 @@ function AdminResource({ section }) {
       const payload = { ...formData };
       for (const key of ['mrpPaise','sellingPricePaise','minimumOrderQuantity','minimumQuantity','stockQuantity','lowStockThreshold','sortOrder','freeShippingThreshold','discountValue','minimumOrderPaise']) if (payload[key] !== undefined && payload[key] !== '' && payload[key] !== null) payload[key] = Number(payload[key]);
       for (const key of ['mrpPaise','sellingPricePaise','minimumQuantity','minimumOrderPaise']) if (payload[key] === '') payload[key] = null;
+      if (payload.categoryId === '') payload.categoryId = null;
+      if (payload.slug === '') delete payload.slug;
       if (payload.imageUrl === '') delete payload.imageUrl;
+      if (Array.isArray(payload.images)) { const images = payload.images.filter((image) => image?.url); const chosenPrimary = images.findIndex((image) => image?.isPrimary); payload.images = images.map((image, index) => ({ url: image.url, ...(image.publicId ? { publicId: image.publicId } : {}), ...(image.altText ? { altText: image.altText } : {}), sortOrder: index, isPrimary: index === (chosenPrimary >= 0 ? chosenPrimary : 0) })); }
       if (payload.shippingChargePaise !== undefined && payload.shippingChargePaise !== '' && payload.shippingChargePaise !== null) payload.shippingChargePaise = Number(payload.shippingChargePaise);
       if (payload.shippingChargePaise === '') payload.shippingChargePaise = null;
       if (payload.socialLinks && typeof payload.socialLinks === 'string') { try { payload.socialLinks = JSON.parse(payload.socialLinks); } catch { throw new Error('Social links must be valid JSON.'); } }
       if (section === 'products' || section === 'categories') {
         if (editId) await api.patch(`${route}/${editId}`, payload); else await api.post(route, payload);
-        toast(editId ? 'Changes saved.' : 'Added to the catalogue.');
+        toast(section === 'products' ? (editId ? 'Product updated.' : 'Product added to the catalogue.') : (editId ? 'Category updated.' : 'Category added.'));
       } else if (section === 'settings') { await api.patch(route, payload); toast('Settings saved.'); }
       else if (section === 'content') { const { key, title, content } = payload; await api.patch(route, { [key]: { title, content } }); toast('Page content saved.'); }
       else if (section === 'inventory') { await api.post(`${route}/adjust`, { productId: editId, change: Number(payload.change), reason: payload.reason }); toast('Stock adjusted.'); }
       else if (section === 'users') { const userPayload = { ...payload }; if (!userPayload.password) delete userPayload.password; if (editId) await api.patch(`${route}/${editId}`, userPayload); else await api.post(route, userPayload); toast(editId ? 'Administrator updated.' : 'Administrator created.'); }
       else if (['offers','banners','faqs','chatbot'].includes(section)) { const endpoint = section === 'chatbot' ? `${route}` : route; if (editId) await api.patch(`${endpoint}/${editId}`, payload); else await api.post(endpoint, payload); toast(editId ? 'Changes saved.' : 'Added successfully.'); }
       else { toast('This record can’t be edited from this screen.', 'error'); }
-      setFormOpen(false); setEditId(null); setFormData({}); query.refetch();
+      closeEditor(); query.refetch();
     } catch (error) { toast(error.response?.data?.message || 'Could not save these changes.', 'error'); }
   }
   async function deleteRecord(id) { if (!window.confirm('Archive this record?')) return; try { if (section === 'users') await api.delete(`${routes[section]}/${id}`); else await api.delete(`${routes[section]}/${id}`); toast(section === 'users' ? 'Administrator disabled.' : 'Record archived.'); query.refetch(); } catch { toast('Could not archive this record.', 'error'); } }
   async function setStatus(orderId, status) { try { await api.patch(`/admin/orders/${orderId}/status`, { status }); toast('Order status updated.'); query.refetch(); } catch { toast('Could not update order status.', 'error'); } }
-  const openEditor = (record = {}) => { setEditId(record.id || null); setFormData(record); setFormOpen(true); };
+  const closeEditor = () => { setFormOpen(false); setEditId(null); setFormData({}); };
+  const openEditor = (record = {}) => {
+    setEditId(record.id || null);
+    setFormData(section === 'products' ? productForm(record) : { ...emptySectionForm(section), ...record });
+    setFormOpen(true);
+  };
   const beginStockAdjustment = (record) => { setEditId(record.id); setFormData({ change: 0, reason: '' }); setFormOpen(true); };
-  const openNew = () => { setEditId(null); setFormData({}); setFormOpen(true); };
+  const openNew = () => { setEditId(null); setFormData(emptySectionForm(section)); setFormOpen(true); };
   const addable = ['products','categories','offers','banners','faqs','chatbot','users'].includes(section);
   const editorFields = fieldDefinitions[section] || (section === 'settings' ? Object.keys(data || {}).map((key) => [key, key.replace(/([A-Z])/g,' $1')]) : Object.keys(formData).filter((key) => !['id','createdAt','updatedAt','lastLoginAt'].includes(key)).slice(0, 12).map((key) => [key,key.replace(/([A-Z])/g,' $1')]));
   const isOrderDetail = section === 'orders' && location.pathname.split('/').filter(Boolean).length > 2;
@@ -787,11 +1047,15 @@ function AdminResource({ section }) {
   async function enquiryStatus(id, status) { try { await api.patch(`/admin/enquiries/${id}`, { status }); toast('Enquiry updated.'); query.refetch(); } catch { toast('Could not update enquiry.', 'error'); } }
   const downloadCsv = async (kind) => { try { const response = await api.get(`/admin/reports/${kind}?format=csv`, { responseType: 'blob' }); const url = URL.createObjectURL(response.data); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `mann-ki-mannat-${kind}.csv`; anchor.click(); URL.revokeObjectURL(url); } catch { toast('Report export is unavailable.', 'error'); } };
   return <div className="admin-content"><div className="admin-resource-toolbar"><div><div className="eyebrow"><span></span> Manage your store</div><h2>{columns}</h2><p>{section === 'orders' ? 'Enquiries remain separate from confirmed sales.' : section === 'reports' ? 'Reports count confirmed orders separately from enquiries.' : 'Keep the details accurate and ready for your customers.'}</p></div><div className="admin-resource-actions">{!['settings','content','reports'].includes(section) && <label className="admin-search"><Search size={15} /><input placeholder="Search records" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></label>}{addable && <button className="button button--forest" onClick={openNew}><Plus size={15} /> Add {({products:'product',categories:'category',offers:'offer',banners:'banner',faqs:'FAQ',chatbot:'answer',users:'administrator'})[section]}</button>}{section === 'content' && <button className="button button--forest" onClick={() => openEditor({ key:'shipping', title:'Shipping', content:'' })}><Plus size={15} /> Add / edit a page</button>}{section === 'settings' && <button className="button button--forest" onClick={() => openEditor(Object.keys(data || {}).length ? data : { businessName:'', tagline:'', whatsappNumber:'', email:'', phone:'', address:'', announcementBar:'', shippingChargePaise:'', freeShippingThreshold:12, globalMinimumQuantity:3, mixedCartShippingPolicy:'eligible_items', promoText:'' })}>Edit settings <Settings size={15} /></button>}{section === 'reports' && <button className="button button--outline" onClick={() => downloadCsv('orders')}>Export orders CSV <ArrowUpRight size={14} /></button>}{section === 'newsletter' && <button className="button button--outline" onClick={() => downloadCsv('newsletter')}>Export subscribers <ArrowUpRight size={14} /></button>}</div></div>
-    {formOpen && <form className="admin-edit-panel" onSubmit={save}><div className="admin-edit-heading"><h3>{editId ? 'Edit' : 'Add'} {section === 'products' ? 'product' : section === 'categories' ? 'category' : section === 'inventory' ? 'stock adjustment' : section === 'settings' ? 'business settings' : section === 'content' ? 'page content' : section === 'users' ? 'administrator' : section === 'chatbot' ? 'assistant answer' : section.slice(0,-1)}</h3><button type="button" onClick={() => setFormOpen(false)}><X size={18} /></button></div>
-      {editorFields.map(([key,label]) => <label className={`admin-form-field ${key === 'content' || key === 'answer' || key === 'description' ? 'admin-form-field--wide' : ''}`} key={key}><span>{label}</span>{key === 'categoryId' ? <select value={formData[key] || ''} onChange={(e) => setFormData({ ...formData, [key]: e.target.value || null })}><option value="">Choose category</option>{categoryOptions.data?.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select> : key === 'discountType' || key === 'mixedCartShippingPolicy' || key === 'role' ? <select value={formData[key] || (key === 'role' ? 'ADMIN' : key === 'discountType' ? 'FIXED' : 'eligible_items')} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}>{(key === 'discountType' ? ['FIXED','PERCENT','FREE_SHIPPING'] : key === 'role' ? ['OWNER','ADMIN','EDITOR'] : ['eligible_items','all_items']).map((option) => <option key={option}>{option}</option>)}</select> : typeof formData[key] === 'boolean' || ['active','featured','seasonal','shippingEligible','chatbotEnabled'].includes(key) ? <input type="checkbox" checked={Boolean(formData[key])} onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })} /> : key === 'content' || key === 'answer' || key === 'description' || key === 'shortDescription' || key === 'ingredients' || key === 'usageInstructions' ? <textarea rows={key === 'content' ? 8 : 3} value={formData[key] ?? ''} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} /> : <input type={key === 'password' ? 'password' : ['startsAt','endsAt'].includes(key) ? 'datetime-local' : 'text'} value={formData[key] == null ? '' : typeof formData[key] === 'object' ? JSON.stringify(formData[key]) : formData[key]} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} />}</label>)}
-      {section === 'products' && editId && <label className="admin-form-field admin-form-field--wide"><span>Upload product images (up to 8, JPG / PNG / WebP)</span><input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={async (event) => { const upload = new FormData(); [...event.target.files].forEach((file) => upload.append('images', file)); try { await api.post(`/admin/products/${editId}/images`, upload, { headers: { 'Content-Type': 'multipart/form-data', 'X-CSRF-Protection': '1' } }); toast('Product images uploaded.'); query.refetch(); } catch (error) { toast(error.response?.data?.message || 'Image upload failed.', 'error'); } }} /></label>}
-      <div className="admin-edit-actions"><button type="button" className="button button--outline" onClick={() => setFormOpen(false)}>Cancel</button><button className="button button--forest" type="submit">Save changes <Check size={15} /></button></div></form>}
-    {query.isLoading ? <div className="admin-table-loading"><LoaderCircle className="spin" /> Loading records…</div> : query.isError ? <ErrorNotice retry={() => query.refetch()} /> : records.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr>{tableFields.map(([, label]) => <th key={label}>{label}</th>)}<th>Actions</th></tr></thead><tbody>{records.map((record) => <tr key={record.id || record.key}>{tableFields.map(([field]) => { const value = field.split('.').reduce((current, part) => current?.[part], record); return <td key={field}>{['sellingPricePaise','mrpPaise','totalPaise','value'].includes(field) && section === 'products' ? money(value) : field === 'active' ? <span className={`status-pill status-pill--${value ? 'active' : 'inactive'}`}>{value ? 'Active' : 'Inactive'}</span> : field === 'approved' || field === 'consent' ? <span className={`status-pill status-pill--${value ? 'active' : 'inactive'}`}>{value ? 'Yes' : 'No'}</span> : ['createdAt','lastLoginAt','updatedAt','unsubscribedAt'].includes(field) ? value ? new Date(value).toLocaleDateString('en-IN') : '—' : ['orderStatus','status'].includes(field) ? section === 'orders' ? <select className="status-select" value={value} onChange={(e) => setStatus(record.id, e.target.value)}>{['ENQUIRY','CONFIRMED','PROCESSING','SHIPPED','DELIVERED','CANCELLED'].map((s) => <option key={s}>{s}</option>)}</select> : section === 'enquiries' ? <select className="status-select" value={value} onChange={(e) => enquiryStatus(record.id, e.target.value)}>{['NEW','IN_PROGRESS','RESOLVED','SPAM'].map((s) => <option key={s}>{s}</option>)}</select> : value : field === 'rating' ? `${value}/5` : value && typeof value === 'object' ? value.name || JSON.stringify(value) : value ?? '—'}</td>; })}<td><div className="table-actions">{['products','categories','offers','banners','faqs','chatbot','users','content'].includes(section) && <button title="Edit" onClick={() => openEditor(record)}><Eye size={15} /></button>}{['products','categories','offers','banners','faqs','chatbot','users'].includes(section) && <button title={section === 'users' ? 'Disable' : 'Delete'} onClick={() => deleteRecord(record.id)}><Trash2 size={15} /></button>}{section === 'reviews' && <button title={record.approved ? 'Hide review' : 'Approve review'} onClick={() => moderateReview(record.id, !record.approved)}><Check size={15} /></button>}{section === 'inventory' && <button title="Adjust stock" onClick={() => beginStockAdjustment(record)}><Plus size={15} /></button>}{section === 'orders' && <Link to={`/admin/orders/${record.id}`} title="View order"><ArrowUpRight size={15} /></Link>}</div></td></tr>)}</tbody></table><div className="admin-pagination"><span>{data?.total ?? records.length} records</span><div><button disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={15} /></button><span>{page}</span><button disabled={data?.pageCount && page >= data.pageCount} onClick={() => setPage(page + 1)}><ChevronRight size={15} /></button></div></div></div> : <div className="admin-empty"><PackageCheck size={24} /><h3>No records yet</h3><p>When your store has {section === 'orders' ? 'customer enquiries' : section}, they will show up here.</p>{addable && <button className="button button--forest" onClick={openNew}><Plus size={15} /> Add the first record</button>}{section === 'settings' && <button className="button button--forest" onClick={() => openEditor({})}>Configure settings <Settings size={15} /></button>}</div>}
+    {formOpen && <form className="admin-edit-panel" onSubmit={save} autoComplete="off"><div className="admin-edit-heading"><div><span className="eyebrow"><span></span> {section === 'products' ? 'Catalogue editor' : 'Record editor'}</span><h3>{editId ? 'Edit' : 'Add'} {section === 'products' ? 'product' : section === 'categories' ? 'category' : section === 'inventory' ? 'stock adjustment' : section === 'settings' ? 'business settings' : section === 'content' ? 'page content' : section === 'users' ? 'administrator' : section === 'chatbot' ? 'assistant answer' : section.slice(0,-1)}</h3><p>{section === 'products' ? 'Fields marked * are required. Prices are entered in rupees and saved automatically.' : 'Empty fields are cleared each time you open a new record.'}</p></div><button type="button" onClick={closeEditor} aria-label="Close editor"><X size={18} /></button></div>
+      {section === 'products' ? <ProductEditorFields formData={formData} setFormData={setFormData} categories={categoryOptions.data} /> : <div className="admin-form-grid admin-form-grid--full">
+        {editorFields.map(([key,label]) => {
+          const wide = ['content','answer','description','shortDescription','ingredients','usageInstructions','notes','value','subtitle','promoText','question'].includes(key);
+          return <label className={`admin-form-field ${wide ? 'admin-form-field--wide' : ''} ${['active','featured','seasonal','shippingEligible','chatbotEnabled','consent'].includes(key) ? 'admin-form-field--check' : ''}`} key={key}><span>{label}</span>{key === 'categoryId' ? <select value={formData[key] || ''} onChange={(e) => setFormData({ ...formData, [key]: e.target.value || null })}><option value="">Choose category</option>{categoryOptions.data?.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select> : key === 'discountType' || key === 'mixedCartShippingPolicy' || key === 'role' ? <select value={formData[key] || (key === 'role' ? 'ADMIN' : key === 'discountType' ? 'FIXED' : 'eligible_items')} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })}>{(key === 'discountType' ? ['FIXED','PERCENT','FREE_SHIPPING'] : key === 'role' ? ['OWNER','ADMIN','EDITOR'] : ['eligible_items','all_items']).map((option) => <option key={option}>{option}</option>)}</select> : typeof formData[key] === 'boolean' || ['active','featured','seasonal','shippingEligible','chatbotEnabled'].includes(key) ? <input type="checkbox" checked={Boolean(formData[key])} onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })} /> : wide ? <textarea rows={key === 'content' ? 9 : 3} value={formData[key] ?? ''} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} placeholder={`Enter ${String(label).toLowerCase()}`} /> : <input type={key === 'password' ? 'password' : ['startsAt','endsAt'].includes(key) ? 'datetime-local' : ['discountValue','minimumOrderPaise','freeShippingThreshold','sortOrder','change'].includes(key) ? 'number' : 'text'} value={formData[key] == null ? '' : typeof formData[key] === 'object' ? JSON.stringify(formData[key]) : formData[key]} onChange={(e) => setFormData({ ...formData, [key]: e.target.value })} placeholder={`Enter ${String(label).toLowerCase()}`} />}</label>;
+        })}
+      </div>}
+      <div className="admin-edit-actions"><button type="button" className="button button--outline" onClick={closeEditor}>Cancel</button><button className="button button--forest" type="submit">{section === 'products' ? 'Save product' : 'Save changes'} <Check size={15} /></button></div></form>}
+    {query.isLoading ? <div className="admin-table-loading"><LoaderCircle className="spin" /> Loading records…</div> : query.isError ? <ErrorNotice retry={() => query.refetch()} /> : records.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr>{tableFields.map(([, label]) => <th key={label}>{label}</th>)}<th>Actions</th></tr></thead><tbody>{records.map((record) => <tr key={record.id || record.key}>{tableFields.map(([field]) => { const value = field.split('.').reduce((current, part) => current?.[part], record); return <td key={field}>{section === 'products' && field === 'name' ? <span className="admin-product-cell"><img src={assetUrl(record.images?.[0]?.url || '/images/royal-sandal.png')} alt="" />{value}</span> : ['sellingPricePaise','mrpPaise','totalPaise','value'].includes(field) && section === 'products' ? money(value) : field === 'active' ? <span className={`status-pill status-pill--${value ? 'active' : 'inactive'}`}>{value ? 'Active' : 'Inactive'}</span> : field === 'approved' || field === 'consent' ? <span className={`status-pill status-pill--${value ? 'active' : 'inactive'}`}>{value ? 'Yes' : 'No'}</span> : ['createdAt','lastLoginAt','updatedAt','unsubscribedAt'].includes(field) ? value ? new Date(value).toLocaleDateString('en-IN') : '—' : ['orderStatus','status'].includes(field) ? section === 'orders' ? <select className="status-select" value={value} onChange={(e) => setStatus(record.id, e.target.value)}>{['ENQUIRY','CONFIRMED','PROCESSING','SHIPPED','DELIVERED','CANCELLED'].map((s) => <option key={s}>{s}</option>)}</select> : section === 'enquiries' ? <select className="status-select" value={value} onChange={(e) => enquiryStatus(record.id, e.target.value)}>{['NEW','IN_PROGRESS','RESOLVED','SPAM'].map((s) => <option key={s}>{s}</option>)}</select> : value : field === 'rating' ? `${value}/5` : value && typeof value === 'object' ? value.name || JSON.stringify(value) : value ?? '—'}</td>; })}<td><div className="table-actions">{['products','categories','offers','banners','faqs','chatbot','users','content'].includes(section) && <button title="Edit" onClick={() => openEditor(record)}><Eye size={15} /></button>}{['products','categories','offers','banners','faqs','chatbot','users'].includes(section) && <button title={section === 'users' ? 'Disable' : 'Delete'} onClick={() => deleteRecord(record.id)}><Trash2 size={15} /></button>}{section === 'reviews' && <button title={record.approved ? 'Hide review' : 'Approve review'} onClick={() => moderateReview(record.id, !record.approved)}><Check size={15} /></button>}{section === 'inventory' && <button title="Adjust stock" onClick={() => beginStockAdjustment(record)}><Plus size={15} /></button>}{section === 'orders' && <Link to={`/admin/orders/${record.id}`} title="View order"><ArrowUpRight size={15} /></Link>}</div></td></tr>)}</tbody></table><div className="admin-pagination"><span>{data?.total ?? records.length} records</span><div><button disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={15} /></button><span>{page}</span><button disabled={data?.pageCount && page >= data.pageCount} onClick={() => setPage(page + 1)}><ChevronRight size={15} /></button></div></div></div> : <div className="admin-empty"><PackageCheck size={24} /><h3>No records yet</h3><p>When your store has {section === 'orders' ? 'customer enquiries' : section}, they will show up here.</p>{addable && <button className="button button--forest" onClick={openNew}><Plus size={15} /> Add the first record</button>}{section === 'settings' && <button className="button button--forest" onClick={() => openEditor({})}>Configure settings <Settings size={15} /></button>}</div>}
   </div>;
 }
 

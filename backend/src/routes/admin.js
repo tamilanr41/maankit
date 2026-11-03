@@ -18,8 +18,7 @@ const categoryRouter = Router();
 const orderRouter = Router();
 const simpleAdminRouter = Router();
 const userRouter = Router();
-const uploadImages = multer({ storage: multer.memoryStorage(), limits: { files: 8, fileSize: 5 * 1024 * 1024 }, fileFilter(_req, file, cb) { cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)); } }).array('images', 8);
-orderRouter.use(requireRoles('OWNER', 'ADMIN'));
+const uploadImages = multer({ storage: multer.memoryStorage(), limits: { files: 8, fileSize: 5 * 1024 * 1024 }, fileFilter(_req, file, cb) { cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)); } }).array('images', 8);orderRouter.use(requireRoles('OWNER', 'ADMIN'));
 
 const loginSchema = z.object({ email: z.string().trim().email().max(191), password: z.string().min(1).max(200) });
 authRouter.get('/setup-status', asyncRoute(async (_req, res) => {
@@ -144,7 +143,7 @@ productRouter.patch('/:id', asyncRoute(async (req, res) => {
   if (input.active === true && (input.sellingPricePaise ?? current.sellingPricePaise) == null) data.active = false;
   if (input.imageUrl !== undefined || input.images !== undefined) {
     const images = imageData(input.images, input.imageUrl);
-    if (images.length) data.images = { deleteMany: {}, create: images };
+    data.images = images.length ? { deleteMany: {}, create: images } : { deleteMany: {} };
   }
   const updated = await prisma.product.update({ where: { id: current.id }, data, include: { category: true, images: true } });
   await logAction(req, 'PRODUCT_UPDATED', 'Product', updated.id);
@@ -429,11 +428,39 @@ userRouter.delete('/:id', asyncRoute(async (req, res) => {
 }));
 adminRouter.use('/users', userRouter);
 
+const mediaRouter = Router();
+const mediaUrl = (id) => `/api/v1/media/${id}/file`;
+mediaRouter.get('/', asyncRoute(async (req, res) => {
+  const { page, limit, skip, search } = pagination(req.query);
+  const where = search ? { fileName: { contains: search } } : {};
+  const [items, total] = await prisma.$transaction([
+    prisma.mediaAsset.findMany({ where, select: { id: true, fileName: true, mimeType: true, sizeBytes: true, createdAt: true }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+    prisma.mediaAsset.count({ where }),
+  ]);
+  return ok(res, { items: items.map((item) => ({ ...item, url: mediaUrl(item.id) })), total, page, pageSize: limit, pageCount: Math.ceil(total / limit) });
+}));
+mediaRouter.post('/', uploadImages, asyncRoute(async (req, res) => {
+  if (!req.files?.length) return fail(res, 400, 'Choose at least one JPG, PNG, or WebP image.');
+  const created = await prisma.$transaction(req.files.map((file) => prisma.mediaAsset.create({ data: { fileName: String(file.originalname || 'image').slice(0, 200), mimeType: file.mimetype, sizeBytes: file.size, data: file.buffer, createdBy: req.admin?.email || null } })));
+  await logAction(req, 'MEDIA_UPLOADED', 'MediaAsset', created.map((asset) => asset.id).join(','));
+  return ok(res, created.map((asset) => ({ id: asset.id, fileName: asset.fileName, mimeType: asset.mimeType, sizeBytes: asset.sizeBytes, createdAt: asset.createdAt, url: mediaUrl(asset.id) })), 201);
+}));
+mediaRouter.delete('/:id', asyncRoute(async (req, res) => {
+  const asset = await prisma.mediaAsset.findUnique({ where: { id: req.params.id } });
+  if (!asset) return fail(res, 404, 'Image not found.');
+  const used = await prisma.productImage.count({ where: { url: mediaUrl(asset.id) } });
+  if (used) return fail(res, 409, 'This image is used by a product. Remove it from the product first.');
+  await prisma.mediaAsset.delete({ where: { id: asset.id } });
+  await logAction(req, 'MEDIA_DELETED', 'MediaAsset', asset.id);
+  return ok(res, { deleted: true });
+}));
+adminRouter.use('/media', mediaRouter);
+
 adminRouter.use('/', simpleAdminRouter);
 
 const orderStatus = { ENQUIRY: 'ENQUIRY', CONFIRMED: 'CONFIRMED', PROCESSING: 'PROCESSING', SHIPPED: 'SHIPPED', DELIVERED: 'DELIVERED', CANCELLED: 'CANCELLED' };
 function pagination(query) { const page = Math.max(1, Number.parseInt(query.page, 10) || 1); const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit, 10) || 20)); return { page, limit, skip: (page - 1) * limit, search: String(query.search || '').trim().slice(0, 100) }; }
-const safeImageUrl = z.string().max(500).refine((value) => { try { return value.startsWith('/images/') || new URL(value).protocol === 'https:'; } catch { return false; } }, 'Use an HTTPS image URL or a local /images/ path.');
+const safeImageUrl = z.string().max(500).refine((value) => { try { return value.startsWith('/images/') || value.startsWith('/api/v1/media/') || new URL(value).protocol === 'https:'; } catch { return false; } }, 'Use an HTTPS image URL, a local /images/ path, or an uploaded image.');
 const productSchema = z.object({ name: z.string().trim().min(2).max(180), slug: z.string().trim().min(2).max(200).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(), sku: z.string().trim().min(2).max(80), categoryId: z.string().nullable().optional(), shortDescription: z.string().max(300).nullable().optional(), description: z.string().max(20000).nullable().optional(), mrpPaise: z.number().int().nonnegative().nullable().optional(), sellingPricePaise: z.number().int().positive().nullable().optional(), minimumOrderQuantity: z.number().int().min(1).max(500).optional(), minimumQuantity: z.number().int().min(1).max(500).nullable().optional(), stockQuantity: z.number().int().nonnegative().optional(), lowStockThreshold: z.number().int().nonnegative().optional(), shippingEligible: z.boolean().optional(), featured: z.boolean().optional(), seasonal: z.boolean().optional(), active: z.boolean().optional(), ingredients: z.string().max(10000).nullable().optional(), usageInstructions: z.string().max(10000).nullable().optional(), fragrance: z.string().max(180).nullable().optional(), seoTitle: z.string().max(180).nullable().optional(), seoDescription: z.string().max(300).nullable().optional(), images: z.array(z.object({ url: safeImageUrl, altText: z.string().max(200).optional(), publicId: z.string().max(255).optional(), sortOrder: z.number().int().nonnegative().optional(), isPrimary: z.boolean().optional() })).max(12).optional(), imageUrl: safeImageUrl.nullable().optional() });
 const categorySchema = z.object({ name: z.string().trim().min(2).max(120), slug: z.string().trim().min(2).max(150).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), description: z.string().max(5000).nullable().optional(), imageUrl: safeImageUrl.nullable().optional(), active: z.boolean().optional(), sortOrder: z.number().int().optional() });
 const faqSchema = z.object({ question: z.string().trim().min(3).max(500), answer: z.string().trim().min(2).max(10000), category: z.string().max(100).nullable().optional(), active: z.boolean().optional(), sortOrder: z.number().int().optional() });

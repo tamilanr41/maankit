@@ -122,6 +122,19 @@ model ProductImage {
   @@map("mkm_product_images")
 }
 
+model MediaAsset {
+  id        String   @id @default(cuid())
+  fileName  String   @db.VarChar(200)
+  mimeType  String   @db.VarChar(60)
+  sizeBytes Int
+  data      Bytes    @db.LongBlob
+  createdBy String?  @db.VarChar(191)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("mkm_media_assets")
+}
+
 model ProductVariant {
   id                String   @id @default(cuid())
   productId         String

@@ -31,6 +31,17 @@ const publicProductSelect = {
   images: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], select: { id: true, url: true, altText: true, isPrimary: true } },
 };
 
+publicRouter.get('/media/:id/file', asyncRoute(async (req, res) => {
+  const asset = await prisma.mediaAsset.findUnique({ where: { id: req.params.id }, select: { data: true, mimeType: true } });
+  if (!asset) return fail(res, 404, 'Image not found.');
+  res.set('Content-Type', asset.mimeType);
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  // Product pages and the admin run on a different origin (Netlify), so the
+  // global same-origin resource policy must be relaxed for these images.
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  return res.send(Buffer.from(asset.data));
+}));
+
 publicRouter.get('/products', asyncRoute(async (req, res) => {
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
   const limit = Math.min(48, Math.max(1, Number.parseInt(req.query.limit, 10) || 12));

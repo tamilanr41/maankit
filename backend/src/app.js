@@ -19,7 +19,7 @@ app.use(pinoHttp({ logger, redact: ['req.headers.cookie', 'req.headers.authoriza
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(cookieParser());
-app.use('/api/v1', rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many requests. Please try again shortly.' } }));
+app.use('/api/v1', rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false, skip: (req) => req.method === 'GET' && req.path.startsWith('/media/'), message: { success: false, message: 'Too many requests. Please try again shortly.' } }));
 app.use('/api/v1/admin/auth/login', rateLimit({ windowMs: 15 * 60_000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many sign-in attempts. Please wait and try again.' } }));
 app.use('/api/v1/admin/auth/setup', rateLimit({ windowMs: 60 * 60_000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: { success: false, message: 'Too many setup attempts. Please wait before trying again.' } }));
 app.get('/health', (_req, res) => res.json({ success: true, status: 'ok' }));
@@ -33,6 +33,8 @@ app.use((error, req, res, _next) => {
   if (status >= 500) req.log?.error({ err: error }, 'request failed');
   if (error.code === 'P2002') return fail(res, 409, 'A record with these details already exists.');
   if (error.code === 'P2025') return fail(res, 404, 'The requested record was not found.');
+  if (error.code === 'LIMIT_FILE_SIZE') return fail(res, 413, 'Each image must be 5 MB or smaller.');
+  if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') return fail(res, 400, 'Upload up to 8 images at a time.');
   if (databaseUnavailable) return fail(res, 503, 'The store database is unavailable. Check the configured database connection and try again.');
   return fail(res, status, status >= 500 ? 'Something went wrong. Please try again.' : error.message, error.details);
 });
