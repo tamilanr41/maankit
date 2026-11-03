@@ -272,6 +272,8 @@ then calls the API on the Netlify origin, so cookies stay first-party.
 | Netlify build uses old API URL | Vite bakes env vars into the build. Change the variable, then clear cache and redeploy. |
 | First request after inactivity is slow | Render free services spin down when idle. Upgrade the plan or accept the cold start. |
 | `/admin/login` shows "setup disabled" | `ADMIN_SETUP_TOKEN` was removed. Use an existing owner account or create one with `npm run admin:create` in the Render shell. |
+| Render build fails with `P3009` / "migrate found failed migrations" | A migration from an earlier deploy failed halfway. `npm run db:deploy` runs `src/scripts/prepare-migrations.js` first, which deletes failed rows for migration folders that no longer exist. Check the log line it prints, then redeploy. |
+| Checkout says "shipping charges are being configured" | No delivery charge is saved. The API writes a ₹60 default on startup; change it in Admin → Settings → Shipping and order minimums. |
 
 ---
 
