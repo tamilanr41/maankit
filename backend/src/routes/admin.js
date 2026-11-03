@@ -58,6 +58,38 @@ authRouter.post('/setup', asyncRoute(async (req, res) => {
   await logAction(req, 'ADMIN_INITIAL_SETUP', 'AdminUser', admin.id);
   return ok(res, { id: admin.id, name: admin.name, email: admin.email, role: admin.role.name }, 201);
 }));
+// Recovery path for the existing owner. Guarded by the same one-time setup
+// token, so a lost password never requires editing bcrypt hashes by hand.
+authRouter.post('/reset-owner', asyncRoute(async (req, res) => {
+  if (!env.ADMIN_SETUP_TOKEN) return fail(res, 404, 'Owner password reset is disabled.');
+  const input = validate(z.object({
+    setupToken: z.string().min(32).max(512),
+    name: z.string().trim().min(2).max(120),
+    email: z.string().trim().email().max(191),
+    password: z.string().min(16).max(200),
+  }), req.body);
+  const suppliedToken = Buffer.from(input.setupToken, 'utf8');
+  const expectedToken = Buffer.from(env.ADMIN_SETUP_TOKEN, 'utf8');
+  if (suppliedToken.length !== expectedToken.length || !timingSafeEqual(suppliedToken, expectedToken)) return fail(res, 403, 'The setup token is incorrect.');
+
+  const owner = await prisma.adminUser.findFirst({ where: { role: { name: 'OWNER' } }, orderBy: { createdAt: 'asc' } });
+  if (!owner) return fail(res, 404, 'No owner account exists yet. Create one from the setup form.');
+
+  const email = input.email.toLowerCase();
+  if (email !== owner.email) {
+    const clash = await prisma.adminUser.findUnique({ where: { email } });
+    if (clash) return fail(res, 409, 'That email is already used by another administrator.');
+  }
+
+  const updated = await prisma.adminUser.update({
+    where: { id: owner.id },
+    data: { name: input.name, email, passwordHash: await bcrypt.hash(input.password, 12), active: true },
+    include: { role: true },
+  });
+  req.admin = { id: updated.id, name: updated.name, email: updated.email, active: updated.active, role: updated.role };
+  await logAction(req, 'ADMIN_PASSWORD_RESET', 'AdminUser', updated.id);
+  return ok(res, { id: updated.id, name: updated.name, email: updated.email, role: updated.role.name });
+}));
 authRouter.post('/login', asyncRoute(async (req, res) => {
   const input = validate(loginSchema, req.body);
   const admin = await prisma.adminUser.findUnique({ where: { email: input.email.toLowerCase() }, include: { role: true } });

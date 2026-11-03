@@ -641,9 +641,23 @@ function AdminLogin() {
       toast(error.response?.data?.message || 'Owner account setup failed. Check the backend and database connection.', 'error');
     }
   }
+  async function resetOwner(values) {
+    if (values.password !== values.confirmPassword) {
+      setSetupError('confirmPassword', { type: 'validate', message: 'The passwords do not match.' });
+      return;
+    }
+    try {
+      await api.post('/admin/auth/reset-owner', { setupToken: values.setupToken, name: values.name, email: values.email, password: values.password });
+      toast('Owner access updated. Sign in with the new email and password.');
+      setAccountMode('login');
+    } catch (error) {
+      toast(error.response?.data?.message || 'Owner reset failed. Check the setup token and try again.', 'error');
+    }
+  }
+  const canResetOwner = setupStatus.reason === 'owner_exists';
   const setupMessage = setupStatus.loading ? 'Checking first-account setup…' : setupStatus.available
     ? 'This store is ready for its first owner account.'
-    : setupStatus.reason === 'owner_exists' ? 'An owner account already exists. Sign in or ask the owner to create another account.'
+    : setupStatus.reason === 'owner_exists' ? 'An owner account already exists. Enter the setup token below to set a new owner email and password, or sign in.'
       : setupStatus.reason === 'disabled' ? 'Initial setup is locked. Configure ADMIN_SETUP_TOKEN in the backend environment and restart the API.'
         : 'The backend or database is unavailable. Start the API, connect the database, then reload this page.';
   return <div className="admin-login-page"><div className="admin-login-art"><div className="admin-login-brand"><BrandMark light /><span className="admin-login-statement">A considered home.<br /><em>Thoughtfully managed.</em></span><small>ADMINISTRATOR ACCESS</small></div><img src="/images/brand-poster.png" alt="" /></div>
@@ -653,15 +667,15 @@ function AdminLogin() {
       <FormField label="Password" error={loginErrors.password?.message}><input {...registerLogin('password', { required: 'Enter your password.' })} type="password" autoComplete="current-password" placeholder="Your password" /></FormField>
       <button className="button button--forest button--wide" disabled={loginSubmitting}>{loginSubmitting ? 'Signing in…' : 'Sign in securely'} <ArrowRight size={16} /></button>
       <div className="admin-account-switch"><span>First time setting up this store?</span><button type="button" onClick={() => setAccountMode('setup')}>Create the owner account <ArrowRight size={14} /></button></div>
-    </form> : <form className="admin-login-form admin-login-form--setup" onSubmit={handleSetupSubmit(createOwner)}>
-      <Link className="back-store" to="/"><ArrowLeft size={15} /> Back to storefront</Link><div className="eyebrow"><span></span> One-time store setup</div><h1>Create your<br /><em>owner account.</em></h1><p>The first owner can manage products, offers, orders, and team access.</p>
+    </form> : <form className="admin-login-form admin-login-form--setup" onSubmit={handleSetupSubmit(canResetOwner ? resetOwner : createOwner)}>
+      <Link className="back-store" to="/"><ArrowLeft size={15} /> Back to storefront</Link><div className="eyebrow"><span></span> {canResetOwner ? 'Owner password reset' : 'One-time store setup'}</div><h1>{canResetOwner ? <>Reset your<br /><em>owner access.</em></> : <>Create your<br /><em>owner account.</em></>}</h1><p>{canResetOwner ? 'Confirm the owner name and email, then set a new password. Store data stays unchanged.' : 'The first owner can manage products, offers, orders, and team access.'}</p>
       <div className={`admin-account-availability ${setupStatus.available ? 'admin-account-availability--ready' : 'admin-account-availability--locked'}`} role="status">{setupMessage}</div>
       <FormField label="Full name" error={setupErrors.name?.message}><input {...registerSetup('name', { required: 'Enter your name.', minLength: { value: 2, message: 'Enter at least 2 characters.' } })} autoComplete="name" placeholder="Store owner" /></FormField>
       <FormField label="Email address (username)" error={setupErrors.email?.message}><input {...registerSetup('email', { required: 'Enter your email address.', pattern: { value: /^\S+@\S+\.\S+$/, message: 'Enter a valid email address.' } })} type="email" autoComplete="username" placeholder="you@example.com" /></FormField>
       <FormField label="Password · at least 16 characters" error={setupErrors.password?.message}><input {...registerSetup('password', { required: 'Create a password.', minLength: { value: 16, message: 'Use at least 16 characters.' } })} type="password" autoComplete="new-password" placeholder="Create a strong password" /></FormField>
       <FormField label="Confirm password" error={setupErrors.confirmPassword?.message}><input {...registerSetup('confirmPassword', { required: 'Confirm your password.' })} type="password" autoComplete="new-password" placeholder="Enter it again" /></FormField>
       <FormField label="One-time setup token" error={setupErrors.setupToken?.message}><input {...registerSetup('setupToken', { required: 'Enter the setup token from the backend configuration.', minLength: { value: 32, message: 'The setup token must be at least 32 characters.' } })} type="password" autoComplete="off" placeholder="Paste ADMIN_SETUP_TOKEN" /></FormField>
-      <button className="button button--forest button--wide" disabled={setupSubmitting || !setupStatus.available}>{setupSubmitting ? 'Creating owner account…' : 'Create owner account'} <ArrowRight size={16} /></button>
+      <button className="button button--forest button--wide" disabled={setupSubmitting || !(setupStatus.available || canResetOwner)}>{setupSubmitting ? (canResetOwner ? 'Updating owner access…' : 'Creating owner account…') : (canResetOwner ? 'Reset owner password' : 'Create owner account')} <ArrowRight size={16} /></button>
       <div className="admin-account-switch"><span>Already have an account?</span><button type="button" onClick={() => setAccountMode('login')}>Sign in <ArrowRight size={14} /></button></div>
     </form>}
   </div>;
