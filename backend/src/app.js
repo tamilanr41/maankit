@@ -34,10 +34,13 @@ app.use((error, req, res, _next) => {
   if (status >= 500) req.log?.error({ err: error }, 'request failed');
   if (error.code === 'P2002') return fail(res, 409, 'A record with these details already exists.');
   if (error.code === 'P2025') return fail(res, 404, 'The requested record was not found.');
+  if (error.code === 'P2028') return fail(res, 503, 'The store took too long to save this request. Please try again.', { code: 'P2028' });
+  if (error.code === 'P2034') return fail(res, 409, 'This record was just updated somewhere else. Please try again.', { code: 'P2034' });
   if (error.code === 'LIMIT_FILE_SIZE') return fail(res, 413, 'Each image must be 5 MB or smaller.');
   if (error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE') return fail(res, 400, 'Upload up to 8 images at a time.');
   if (databaseUnavailable) return fail(res, 503, 'The store database is unavailable. Check the configured database connection and try again.');
   // A route that deliberately uses a 5xx (for example "shipping is not
   // configured yet") should say so, instead of a generic failure message.
-  return fail(res, status, status >= 500 && !explicitStatus ? 'Something went wrong. Please try again.' : error.message, error.details);
+  if (status >= 500 && !explicitStatus) return fail(res, status, 'Something went wrong. Please try again.', error.code ? { code: String(error.code) } : undefined);
+  return fail(res, status, error.message, error.details);
 });

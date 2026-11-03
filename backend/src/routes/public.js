@@ -171,14 +171,20 @@ publicRouter.post('/orders', asyncRoute(async (req, res) => {
 
   const uniqueIds = [...new Set(input.items.map((item) => item.productId))];
   if (uniqueIds.length !== input.items.length) return fail(res, 400, 'Each product must appear only once in the bag.');
-  const order = await prisma.$transaction(async (tx) => {
-    const products = await tx.product.findMany({ where: { id: { in: uniqueIds } } });
-    const calc = await calculateOrder(products, input.items);
+
+  // Price the cart and load settings before the write transaction opens. This
+  // keeps the transaction to three quick inserts instead of holding a lock
+  // across several network round trips to the database.
+  const products = await prisma.product.findMany({ where: { id: { in: uniqueIds } } });
+  const calc = await calculateOrder(products, input.items);
+  const date = new Date().toISOString().slice(0, 10).replaceAll('-', '');
+  const reference = `MKM-${date}-${randomBytes(5).toString('hex').toUpperCase()}`;
+
+  // A deadlock on a busy database is safe to retry: nothing has been committed.
+  const order = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
     const customer = await tx.customer.upsert({ where: { phone: input.phone }, create: { fullName: input.fullName, phone: input.phone, email: input.email || null }, update: { fullName: input.fullName, email: input.email || null } });
     await tx.address.create({ data: { customerId: customer.id, address: input.address, city: input.city, state: input.state, pinCode: input.pinCode, isDefault: true } });
-    const date = new Date().toISOString().slice(0, 10).replaceAll('-', '');
-    const reference = `MKM-${date}-${randomBytes(5).toString('hex').toUpperCase()}`;
-    const created = await tx.order.create({ data: {
+    return tx.order.create({ data: {
       orderNumber: reference, publicToken: randomBytes(32).toString('hex'), idempotencyKey, customerId: customer.id,
       customerName: input.fullName, customerPhone: input.phone, customerEmail: input.email || null,
       addressSnapshot: input.address, city: input.city, state: input.state, pinCode: input.pinCode,
@@ -188,10 +194,23 @@ publicRouter.post('/orders', asyncRoute(async (req, res) => {
       items: { create: calc.lines.map(({ product, quantity, lineTotalPaise }) => ({ productId: product.id, productName: product.name, sku: product.sku, mrpPaise: product.mrpPaise, sellingPricePaise: product.sellingPricePaise, quantity, lineTotalPaise })) },
       statusHistory: { create: { toStatus: 'ENQUIRY', note: 'Order enquiry created from storefront.' } },
     }, include: { items: true } });
-    return created;
-  }, { isolationLevel: 'Serializable' });
+  }, { maxWait: 10_000, timeout: 20_000 }));
   return ok(res, await orderResponse(order), 201);
 }));
+
+const TRANSIENT_DB_ERROR = /deadlock|lock wait timeout|connection pool timed out/i;
+async function withTransactionRetry(work, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      if (error.code !== 'P2034' && !TRANSIENT_DB_ERROR.test(String(error.message))) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
 
 publicRouter.get('/orders/reference/:orderNumber', asyncRoute(async (req, res) => {
   const order = await prisma.order.findUnique({ where: { orderNumber: req.params.orderNumber }, include: { items: true } });
