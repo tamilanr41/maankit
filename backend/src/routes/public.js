@@ -173,17 +173,18 @@ publicRouter.post('/orders', asyncRoute(async (req, res) => {
   if (uniqueIds.length !== input.items.length) return fail(res, 400, 'Each product must appear only once in the bag.');
 
   // Price the cart and load settings before the write transaction opens. This
-  // keeps the transaction to three quick inserts instead of holding a lock
-  // across several network round trips to the database.
+  // keeps the transaction to two quick writes instead of holding a lock across
+  // several network round trips to the database.
   const products = await prisma.product.findMany({ where: { id: { in: uniqueIds } } });
   const [calc, contact] = await Promise.all([calculateOrder(products, input.items), readSettings(['whatsappNumber'])]);
   const date = new Date().toISOString().slice(0, 10).replaceAll('-', '');
   const reference = `MKM-${date}-${randomBytes(5).toString('hex').toUpperCase()}`;
 
   // A deadlock on a busy database is safe to retry: nothing has been committed.
+  // The full delivery address is stored on the order itself, so no extra
+  // address row (an unused read) is written for every enquiry.
   const order = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
     const customer = await tx.customer.upsert({ where: { phone: input.phone }, create: { fullName: input.fullName, phone: input.phone, email: input.email || null }, update: { fullName: input.fullName, email: input.email || null } });
-    await tx.address.create({ data: { customerId: customer.id, address: input.address, city: input.city, state: input.state, pinCode: input.pinCode, isDefault: true } });
     return tx.order.create({ data: {
       orderNumber: reference, publicToken: randomBytes(32).toString('hex'), idempotencyKey, customerId: customer.id,
       customerName: input.fullName, customerPhone: input.phone, customerEmail: input.email || null,
