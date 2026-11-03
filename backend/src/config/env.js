@@ -1,10 +1,17 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+function normalizeUrl(value) {
+  if (typeof value !== 'string') return value;
+  const cleaned = value.trim().replace(/^["']+|["']+$/g, '').replace(/\/+$/, '');
+  if (cleaned === '') return undefined;
+  return /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(5000),
-  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  FRONTEND_URL: z.preprocess(normalizeUrl, z.string().url().default('http://localhost:5173')),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required.'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters.'),
   ADMIN_SETUP_TOKEN: z.preprocess((value) => (value === '' ? undefined : value), z.string().min(32, 'ADMIN_SETUP_TOKEN must be at least 32 characters.').optional()),
