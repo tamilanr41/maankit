@@ -19,7 +19,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
-        value: 20.18.1
+        value: 22.23.4
       - key: LOG_LEVEL
         value: info
       # Generated once by Render. Never hardcode these in the repository.

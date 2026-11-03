@@ -260,12 +260,13 @@ then calls the API on the Netlify origin, so cookies stay first-party.
 
 | Symptom | Fix |
 | --- | --- |
-| Render build fails on `prisma generate` | The build command must install dev dependencies: `npm ci --include=dev`. The included `render.yaml` already does this. Confirm `NODE_VERSION` is 20. |
+| Render build fails on `prisma generate` | The build command must install dev dependencies: `npm ci --include=dev`. The included `render.yaml` already does this. Confirm `NODE_VERSION` is `22.23.4`. |
 | Hostinger: `Access denied for user ...` | Enable **Databases → Remote MySQL** in hPanel, allow `%` (Any Host), and select the correct database. Use the `srvXXXX.hstgr.io` hostname, not `localhost`. |
 | Hostinger: connection times out | Remote MySQL is not enabled for the database, or the host/port is wrong. Remote port is `3306`. |
 | Prisma throws an SSL error with Hostinger | Remove `?sslaccept=strict` from `DATABASE_URL` unless your Hostinger plan requires SSL. |
 | API returns `503` / "database is unavailable" | Check `DATABASE_URL`, database host/port, password, SSL mode, and Hostinger Remote MySQL access. |
 | API starts but tables are missing | Check the Render build log for `prisma migrate deploy`. You can also import `work/hostinger-mkm-import.sql` through phpMyAdmin. |
+| `ERR_REQUIRE_ESM` / `require() of ES Module` at startup | Set `NODE_VERSION=22.23.4` (or any 22.12+) in Render → Environment. Node 20 is EOL and cannot `require()` the ESM-only `htmlparser2` that `sanitize-html` uses. |
 | Browser shows a CORS error | `FRONTEND_URL` must exactly match the browser origin, including `https://` and no trailing slash. Redeploy after changing it. |
 | Admin login returns 200 but the dashboard immediately signs out | The browser blocked the cross-site cookie. Use the custom-domain or Netlify proxy setup above. |
 | Netlify build uses old API URL | Vite bakes env vars into the build. Change the variable, then clear cache and redeploy. |
