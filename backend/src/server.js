@@ -2,7 +2,7 @@ import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { prisma } from './config/db.js';
 import { app } from './app.js';
-import { ensureDefaultSettings } from './services/settings.js';
+import { ensureDefaultSettings, repairShippingEligibility } from './services/settings.js';
 
 const server = app.listen(env.PORT, () => {
   logger.info({ port: env.PORT }, 'Mann Ki Mannat API is listening');
@@ -11,8 +11,12 @@ const server = app.listen(env.PORT, () => {
   ensureDefaultSettings()
     .then((created) => {
       if (created.length) logger.info({ created }, 'created missing default settings');
+      return repairShippingEligibility();
     })
-    .catch((error) => logger.error({ err: error }, 'could not prepare default settings'));
+    .then((repaired) => {
+      if (repaired) logger.info({ repaired }, 'restored shipping eligibility on catalogue items');
+    })
+    .catch((error) => logger.error({ err: error }, 'could not prepare store settings'));
 });
 
 async function shutdown(signal) {

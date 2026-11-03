@@ -478,7 +478,7 @@ function CartPage() {
     `Total pieces: ${eligiblePieces}`,
     `Subtotal: ${subtotal ? money(subtotal) : 'to confirm'}`,
     savings > 0 ? `Offer: ${money(savings)} off` : null,
-    `Shipping: ${eligiblePieces >= threshold ? 'Free' : 'Please confirm the shipping charge'}`,
+    `Shipping: ${verified ? (verified.shippingPaise === 0 ? 'Free' : money(verified.shippingPaise)) : eligiblePieces >= threshold ? 'Free' : 'Please confirm the shipping charge'}`,
     'Please confirm stock and delivery details.',
   ].filter(Boolean).join('\n');
   const whatsappOrderUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`;

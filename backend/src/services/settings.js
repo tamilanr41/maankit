@@ -34,3 +34,17 @@ export async function ensureDefaultSettings() {
   }
   return created;
 }
+
+// An early admin save could clear `shippingEligible` on catalogue items. That
+// flag silently blocks the advertised "free shipping on 12 pieces" offer, so a
+// 12-piece bag was still charged delivery. Repair it once; after this marker
+// exists the owner's own choices are respected.
+const SHIPPING_FLAG_REPAIR = 'maintenance.shippingEligible.20261103';
+
+export async function repairShippingEligibility() {
+  const marker = await prisma.siteSetting.findUnique({ where: { key: SHIPPING_FLAG_REPAIR }, select: { key: true } });
+  if (marker) return 0;
+  const result = await prisma.product.updateMany({ where: { shippingEligible: false, archivedAt: null }, data: { shippingEligible: true } });
+  await prisma.siteSetting.create({ data: { key: SHIPPING_FLAG_REPAIR, value: { repaired: result.count, at: new Date().toISOString() }, updatedBy: 'system' } });
+  return result.count;
+}
