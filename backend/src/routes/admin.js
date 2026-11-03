@@ -12,6 +12,11 @@ import { clearAdminCookie, requireAdmin, requireAdminCsrf, requireOwner, require
 import { readSettings, writeSetting } from '../services/settings.js';
 
 export const adminRouter = Router();
+// bcrypt work factor. The Render free instance has a very small CPU share, so a
+// cost of 12 makes sign-in take several seconds. Cost 10 still meets the OWASP
+// minimum and keeps logins responsive; raise BCRYPT_ROUNDS to harden it later.
+const BCRYPT_ROUNDS = Math.min(14, Math.max(10, Number.parseInt(process.env.BCRYPT_ROUNDS, 10) || 10));
+const hashPassword = (password) => bcrypt.hash(password, BCRYPT_ROUNDS);
 const authRouter = Router();
 const productRouter = Router();
 const categoryRouter = Router();
@@ -47,7 +52,7 @@ authRouter.post('/setup', asyncRoute(async (req, res) => {
     }
     const role = await tx.role.upsert({ where: { name: 'OWNER' }, create: { name: 'OWNER', description: 'Full access to store management.' }, update: {} });
     return tx.adminUser.create({
-      data: { name: input.name, email: input.email.toLowerCase(), passwordHash: await bcrypt.hash(input.password, 12), roleId: role.id },
+      data: { name: input.name, email: input.email.toLowerCase(), passwordHash: await hashPassword(input.password), roleId: role.id },
       include: { role: true },
     });
   }, { isolationLevel: 'Serializable' });
@@ -82,7 +87,7 @@ authRouter.post('/reset-owner', asyncRoute(async (req, res) => {
 
   const updated = await prisma.adminUser.update({
     where: { id: owner.id },
-    data: { name: input.name, email, passwordHash: await bcrypt.hash(input.password, 12), active: true },
+    data: { name: input.name, email, passwordHash: await hashPassword(input.password), active: true },
     include: { role: true },
   });
   req.admin = { id: updated.id, name: updated.name, email: updated.email, active: updated.active, role: updated.role };
@@ -93,10 +98,12 @@ authRouter.post('/login', asyncRoute(async (req, res) => {
   const input = validate(loginSchema, req.body);
   const admin = await prisma.adminUser.findUnique({ where: { email: input.email.toLowerCase() }, include: { role: true } });
   if (!admin || !admin.active || !(await bcrypt.compare(input.password, admin.passwordHash))) return fail(res, 401, 'Email or password is incorrect.');
-  await prisma.adminUser.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
   req.admin = { ...admin, active: true };
   setAdminCookie(res, admin);
-  await logAction(req, 'AUTH_LOGIN', 'AdminUser', admin.id);
+  await Promise.all([
+    prisma.adminUser.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } }),
+    logAction(req, 'AUTH_LOGIN', 'AdminUser', admin.id),
+  ]);
   return ok(res, { id: admin.id, name: admin.name, email: admin.email, role: admin.role.name });
 }));
 authRouter.post('/logout', requireAdmin, requireAdminCsrf, asyncRoute(async (req, res) => { clearAdminCookie(res); await logAction(req, 'AUTH_LOGOUT', 'AdminUser', req.admin.id); return ok(res, { signedOut: true }); }));
@@ -105,7 +112,7 @@ authRouter.post('/change-password', requireAdmin, requireAdminCsrf, asyncRoute(a
   const input = validate(z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(12).max(200) }), req.body);
   const admin = await prisma.adminUser.findUnique({ where: { id: req.admin.id } });
   if (!admin || !(await bcrypt.compare(input.currentPassword, admin.passwordHash))) return fail(res, 400, 'Current password is incorrect.');
-  await prisma.adminUser.update({ where: { id: admin.id }, data: { passwordHash: await bcrypt.hash(input.newPassword, 12) } });
+  await prisma.adminUser.update({ where: { id: admin.id }, data: { passwordHash: await hashPassword(input.newPassword) } });
   clearAdminCookie(res);
   await logAction(req, 'PASSWORD_CHANGED', 'AdminUser', admin.id);
   return ok(res, { changed: true });
@@ -117,7 +124,7 @@ adminRouter.use(requireAdminCsrf);
 productRouter.get('/', asyncRoute(async (req, res) => {
   const { page, limit, skip, search } = pagination(req.query);
   const where = { ...(search ? { OR: [{ name: { contains: search } }, { sku: { contains: search } }] } : {}), ...(req.query.active === 'true' ? { active: true } : req.query.active === 'false' ? { active: false } : {}) };
-  const [items, total] = await prisma.$transaction([
+  const [items, total] = await Promise.all([
     prisma.product.findMany({ where, include: { category: true, images: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }] } }, orderBy: { updatedAt: 'desc' }, skip, take: limit }),
     prisma.product.count({ where }),
   ]);
@@ -181,7 +188,7 @@ adminRouter.use('/products', productRouter);
 categoryRouter.get('/', asyncRoute(async (req, res) => {
   const { page, limit, skip, search } = pagination(req.query);
   const where = search ? { OR: [{ name: { contains: search } }, { slug: { contains: search } }] } : {};
-  const [items, total] = await prisma.$transaction([prisma.category.findMany({ where, include: { _count: { select: { products: true } } }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], skip, take: limit }), prisma.category.count({ where })]);
+  const [items, total] = await Promise.all([prisma.category.findMany({ where, include: { _count: { select: { products: true } } }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], skip, take: limit }), prisma.category.count({ where })]);
   return ok(res, { items, total, page, pageSize: limit, pageCount: Math.ceil(total / limit) });
 }));
 categoryRouter.post('/', asyncRoute(async (req, res) => {
@@ -209,7 +216,7 @@ orderRouter.get('/', asyncRoute(async (req, res) => {
   const { page, limit, skip, search } = pagination(req.query);
   const status = Object.values(orderStatus).includes(req.query.status) ? req.query.status : undefined;
   const where = { ...(status ? { orderStatus: status } : {}), ...(search ? { OR: [{ orderNumber: { contains: search } }, { customerName: { contains: search } }, { customerPhone: { contains: search } }] } : {}) };
-  const [items, total] = await prisma.$transaction([prisma.order.findMany({ where, include: { items: true }, orderBy: { createdAt: 'desc' }, skip, take: limit }), prisma.order.count({ where })]);
+  const [items, total] = await Promise.all([prisma.order.findMany({ where, include: { items: true }, orderBy: { createdAt: 'desc' }, skip, take: limit }), prisma.order.count({ where })]);
   return ok(res, { items, total, page, pageSize: limit, pageCount: Math.ceil(total / limit) });
 }));
 orderRouter.get('/:id', asyncRoute(async (req, res) => {
@@ -294,7 +301,7 @@ simpleAdminRouter.get('/dashboard/product-performance', asyncRoute(async (_req, 
 simpleAdminRouter.get('/inventory', asyncRoute(async (req, res) => {
   const { page, limit, skip, search } = pagination(req.query);
   const where = { archivedAt: null, ...(search ? { OR: [{ name: { contains: search } }, { sku: { contains: search } }] } : {}) };
-  const [items, total] = await prisma.$transaction([prisma.product.findMany({ where, select: { id: true, name: true, sku: true, stockQuantity: true, lowStockThreshold: true, active: true, images: { where: { isPrimary: true }, take: 1 } }, orderBy: { stockQuantity: 'asc' }, skip, take: limit }), prisma.product.count({ where })]);
+  const [items, total] = await Promise.all([prisma.product.findMany({ where, select: { id: true, name: true, sku: true, stockQuantity: true, lowStockThreshold: true, active: true, images: { where: { isPrimary: true }, take: 1 } }, orderBy: { stockQuantity: 'asc' }, skip, take: limit }), prisma.product.count({ where })]);
   return ok(res, { items, total, page, pageSize: limit, pageCount: Math.ceil(total / limit) });
 }));
 simpleAdminRouter.post('/inventory/adjust', requireRoles('OWNER', 'ADMIN'), asyncRoute(async (req, res) => {
@@ -311,7 +318,7 @@ simpleAdminRouter.post('/inventory/adjust', requireRoles('OWNER', 'ADMIN'), asyn
 }));
 simpleAdminRouter.get('/inventory/history', asyncRoute(async (req, res) => {
   const { page, limit, skip } = pagination(req.query);
-  const [items, total] = await prisma.$transaction([prisma.inventoryTransaction.findMany({ include: { product: { select: { name: true, sku: true } } }, orderBy: { createdAt: 'desc' }, skip, take: limit }), prisma.inventoryTransaction.count()]);
+  const [items, total] = await Promise.all([prisma.inventoryTransaction.findMany({ include: { product: { select: { name: true, sku: true } } }, orderBy: { createdAt: 'desc' }, skip, take: limit }), prisma.inventoryTransaction.count()]);
   return ok(res, { items, total, page, pageSize: limit, pageCount: Math.ceil(total / limit) });
 }));
 
@@ -371,7 +378,7 @@ simpleAdminRouter.delete('/banners/:id', asyncRoute(async (req, res) => { await 
 
 simpleAdminRouter.get('/customers', requireRoles('OWNER', 'ADMIN'), asyncRoute(async (req, res) => {
   const { page, limit, skip, search } = pagination(req.query); const where = search ? { OR: [{ fullName: { contains: search } }, { phone: { contains: search } }, { email: { contains: search } }] } : {};
-  const [items, total] = await prisma.$transaction([prisma.customer.findMany({ where, include: { _count: { select: { orders: true } } }, orderBy: { createdAt: 'desc' }, skip, take: limit }), prisma.customer.count({ where })]); return ok(res, { items, total, page, pageSize: limit, pageCount: Math.ceil(total / limit) });
+  const [items, total] = await Promise.all([prisma.customer.findMany({ where, include: { _count: { select: { orders: true } } }, orderBy: { createdAt: 'desc' }, skip, take: limit }), prisma.customer.count({ where })]); return ok(res, { items, total, page, pageSize: limit, pageCount: Math.ceil(total / limit) });
 }));
 simpleAdminRouter.get('/enquiries', requireRoles('OWNER', 'ADMIN'), asyncRoute(async (req, res) => paginatedSimple(res, prisma.enquiry, req.query, { where: req.query.status ? { status: String(req.query.status) } : {}, orderBy: { createdAt: 'desc' } })));
 simpleAdminRouter.patch('/enquiries/:id', requireRoles('OWNER', 'ADMIN'), asyncRoute(async (req, res) => { const input = validate(z.object({ status: z.enum(['NEW', 'IN_PROGRESS', 'RESOLVED', 'SPAM']) }), req.body); return ok(res, await prisma.enquiry.update({ where: { id: req.params.id }, data: input })); }));
@@ -407,14 +414,14 @@ userRouter.get('/', asyncRoute(async (_req, res) => {
 userRouter.post('/', asyncRoute(async (req, res) => {
   const input = validate(z.object({ name: z.string().trim().min(2).max(120), email: z.string().email().max(191), password: z.string().min(12).max(200), role: z.enum(['OWNER', 'ADMIN', 'EDITOR']).default('ADMIN') }), req.body);
   const role = await prisma.role.upsert({ where: { name: input.role }, create: { name: input.role }, update: {} });
-  const user = await prisma.adminUser.create({ data: { name: input.name, email: input.email.toLowerCase(), passwordHash: await bcrypt.hash(input.password, 12), roleId: role.id }, select: { id: true, name: true, email: true, active: true, role: { select: { name: true } } } });
+  const user = await prisma.adminUser.create({ data: { name: input.name, email: input.email.toLowerCase(), passwordHash: await hashPassword(input.password), roleId: role.id }, select: { id: true, name: true, email: true, active: true, role: { select: { name: true } } } });
   await logAction(req, 'ADMIN_CREATED', 'AdminUser', user.id);
   return ok(res, user, 201);
 }));
 userRouter.patch('/:id', asyncRoute(async (req, res) => {
   const input = validate(z.object({ name: z.string().trim().min(2).max(120).optional(), active: z.boolean().optional(), password: z.string().min(12).max(200).optional(), role: z.enum(['OWNER', 'ADMIN', 'EDITOR']).optional() }), req.body);
   if (req.params.id === req.admin.id && input.active === false) return fail(res, 400, 'You cannot disable your own administrator account.');
-  const data = { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.active !== undefined ? { active: input.active } : {}), ...(input.password ? { passwordHash: await bcrypt.hash(input.password, 12) } : {}) };
+  const data = { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.active !== undefined ? { active: input.active } : {}), ...(input.password ? { passwordHash: await hashPassword(input.password) } : {}) };
   if (input.role) { const role = await prisma.role.upsert({ where: { name: input.role }, create: { name: input.role }, update: {} }); data.roleId = role.id; }
   const user = await prisma.adminUser.update({ where: { id: req.params.id }, data, select: { id: true, name: true, email: true, active: true, role: { select: { name: true } } } });
   await logAction(req, 'ADMIN_UPDATED', 'AdminUser', user.id);
@@ -433,7 +440,7 @@ const mediaUrl = (id) => `/api/v1/media/${id}/file`;
 mediaRouter.get('/', asyncRoute(async (req, res) => {
   const { page, limit, skip, search } = pagination(req.query);
   const where = search ? { fileName: { contains: search } } : {};
-  const [items, total] = await prisma.$transaction([
+  const [items, total] = await Promise.all([
     prisma.mediaAsset.findMany({ where, select: { id: true, fileName: true, mimeType: true, sizeBytes: true, createdAt: true }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
     prisma.mediaAsset.count({ where }),
   ]);
@@ -470,7 +477,7 @@ function productData(input) { const { images, imageUrl, ...data } = input; retur
 function imageData(images = [], imageUrl) { const output = images?.length ? images : imageUrl ? [{ url: imageUrl, isPrimary: true, sortOrder: 0 }] : []; return output.map((image, index) => ({ url: image.url, altText: image.altText || null, publicId: image.publicId || null, sortOrder: image.sortOrder ?? index, isPrimary: image.isPrimary ?? index === 0 })); }
 function slugify(text) { return text.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 async function logAction(req, action, entity, entityId, metadata) { await prisma.adminActivityLog.create({ data: { adminEmail: req.admin?.email || 'system', action, entity, entityId, ...(metadata ? { metadata } : {}) } }); }
-async function paginatedSimple(res, model, query, options = {}) { const { page, limit, skip, search } = pagination(query); const where = { ...(options.where || {}), ...(search && model === prisma.faq ? { question: { contains: search } } : {}) }; const [items, total] = await prisma.$transaction([model.findMany({ where, ...(options.include ? { include: options.include } : {}), ...(options.orderBy ? { orderBy: options.orderBy } : {}), skip, take: limit }), model.count({ where })]); return ok(res, { items, total, page, pageSize: limit, pageCount: Math.ceil(total / limit) }); }
+async function paginatedSimple(res, model, query, options = {}) { const { page, limit, skip, search } = pagination(query); const where = { ...(options.where || {}), ...(search && model === prisma.faq ? { question: { contains: search } } : {}) }; const [items, total] = await Promise.all([model.findMany({ where, ...(options.include ? { include: options.include } : {}), ...(options.orderBy ? { orderBy: options.orderBy } : {}), skip, take: limit }), model.count({ where })]); return ok(res, { items, total, page, pageSize: limit, pageCount: Math.ceil(total / limit) }); }
 function sanitizeContent(html) { return sanitizeHtml(html, { allowedTags: [...sanitizeHtml.defaults.allowedTags, 'img'], allowedAttributes: { a: ['href', 'name', 'target', 'rel'], img: ['src', 'alt', 'width', 'height'] }, allowedSchemes: ['http', 'https', 'mailto'], allowedSchemesByTag: { img: ['http', 'https'] } }); }
 function uploadToCloudinary(buffer) { return new Promise((resolve, reject) => { const stream = cloudinary.uploader.upload_stream({ folder: 'mann-ki-mannat/products', resource_type: 'image', transformation: [{ width: 1600, height: 1600, crop: 'limit' }, { quality: 'auto', fetch_format: 'auto' }] }, (error, result) => error ? reject(error) : resolve(result)); stream.end(buffer); }); }
 async function reportResponse(req, res, kind) {

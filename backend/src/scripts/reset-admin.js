@@ -19,7 +19,7 @@ async function main() {
   const updated = await prisma.adminUser.update({
     where: { email },
     data: {
-      passwordHash: await bcrypt.hash(password, 12),
+      passwordHash: await bcrypt.hash(password, Number.parseInt(process.env.BCRYPT_ROUNDS, 10) || 10),
       active: true,
       ...(name ? { name } : {}),
       ...(newEmail ? { email: newEmail } : {}),
